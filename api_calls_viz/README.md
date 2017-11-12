@@ -3,7 +3,7 @@
 The script allows to perform visualization of a trace of library calls provided in the following format 
 (arguments are ignored):
 
-```*<library_name>!<library_call_name>*```
+```<library_name>!<library_call_name>```
 
 Each unique library call is assigned with unique color from RGB or grayscale pallette. The tool generates an 
 image where each pixel represents library call from a trace.
