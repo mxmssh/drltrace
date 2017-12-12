@@ -113,7 +113,8 @@ Each function argument should be separated by ```|```. The first argument is ret
 You can find examples of how to use Drltrace for analysis of complex malware at our [Wiki page](https://github.com/mxmssh/drltrace/wiki/Malware-Analysis-Examples). *At this page we described how drltrace allowed us to revel in several minutes a lot of internal technical details without even starting IDA or debugger about several sophisticated malicious samples.*
 
 # How to Build
-TODO
+
+You can find a detailed manual at this [Wiki page](https://github.com/mxmssh/drltrace/wiki/How-To-Build).
 
 # OS Support
 Windows, Linux (macOS in future).
