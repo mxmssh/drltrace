@@ -113,15 +113,17 @@ You can find examples of how to use Drltrace for analysis of complex malware at 
 
 # Log Visualization
 
-To make the work with log files easier, we have implemented a script called ```api_calls_viz.py``` which can be used to generate RGB images where each pixel represent unique API call. For example, the picture below represents log file of ???? malware.
+To make the work with log files easier, we have implemented a script called ```api_calls_viz.py``` which can be used to generate RGB images where each pixel represent unique API call. For example, the picture below represents log file of WannaCry malware.
 
-PICTURE HERE
+![API calls picture](pictures/api_calls_vis.png)
 
-You can easily find that the first part of the image (which has certain structure) is unpacking process.
+The large green areas on the picture represent API calls (```wcscmp/wcsicmp```) which are used to select files with interesting extensions (e.g. docx, xls, py) to encrypt them. The purple areas represents API calls (```FindFirstFile/FindNextFile```) which are used to enumerate files and folders on the disk.
 
-The script can also generate an HTML representation of generated RGB image where each element can be selected to show a name of API call.
+The script can also generate an HTML representation of generated RGB image where each element can be selected to show a name of API call. 
 
-PICTURE HERE
+![API calls picture](pictures/wannacry_truncated_log_html.png)
+
+[Raw HTML File](pictures/wannacry_truncated_log.html).
 
 See the ```api_calls_viz``` [directory](https://github.com/mxmssh/drltrace/tree/master/api_calls_viz) for more details.
 
