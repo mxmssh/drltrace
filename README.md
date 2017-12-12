@@ -6,10 +6,9 @@ Drltrace is a dynamic API calls tracer for Windows and Linux applications design
 BSD.
 
 # Motivation
-<Some intro>
-Sophisticated software packers like Themida and Armadillo and of course dozens of unnamed packers written by malware authors plus code & data encryption significantly facilitate (in some cases making it completely impossible) static reverse engineering of such samples thereby delaying detection. In such case, API calls tracing can significantly reduce amount of time required to understand an actual malicious intent and ?????.  <More motivation for API calls tracing>.
+Malware analysis is not an easy task. Sophisticated software packers like Themida and Armadillo and of course dozens of unnamed packers written by malware authors plus code & data encryption significantly facilitate (in some cases making it completely impossible) static reverse engineering of such samples making life of malware analysts complicated. In such case, API calls tracing can significantly reduce amount of time required to understand an actual malicious intent and reveal a lot of technical details about protected malicious code.
 
-While traditional technique of API-hooking technique was successfully implemented in several solutions, the approach is well studied by malware authors and can be easily detected and/or bypassed. Moreover, these tools are distributed as standalone heavy-weight GUI applications (as proprietary products) which are not often easy to integrate within existent malware analysis workflow.
+While traditional technique of API-hooking was successfully implemented in several solutions, the approach is well studied by malware authors and can be easily detected and/or bypassed. Moreover, these tools are distributed as standalone heavy-weight GUI applications (as proprietary products) which are not often easy to integrate within existent malware analysis workflow.
 
 If we look on Linux world, there is a wonderful tool called [ltrace](https://linux.die.net/man/1/ltrace). Using a single bash command, we can easily get the full trace of API calls of a certain executable. 
 
@@ -28,7 +27,7 @@ However, application of DBI for malware analysis is undeservedly limited by unpa
 - Not-detectable by standard anti-research approaches (anti-hooking, anti-debugging and anti-emulation).
 - User can easily add a new function prototype to tell drltrace how to print more details about previously unknown API calls (even about non-system DLLs). External configuration file is used.
 - Easy-to-use and modify for your own purposes (no additional package requirements, no heavy-weight GUI interface).
-- Open-source (BSD-license), you can freely build & use your own advanced solution on top of drltrace.
+- Open-source (BSD-license), code is clear and well-documented. You can freely build & use your own advanced solution on top of drltrace.
 
 # Usage
 The usage of drltrace is very simple. A user needs to specify a log directory and a name of a target process in the following way:
@@ -142,7 +141,7 @@ C and C++ standard libraries (and logs handling scripts written in Python).
 
 We decided to implement our API calls tracer on top of dynamic binary instrumentation framework [DynamoRIO](http://www.dynamorio.org/). Drltrace asks DynamoRIO to perform instrumentation of LoadLibrary call to be able to handle new libraries being loaded by the target process. When the process tries to load a new library, DynamoRIO redirects control flow to ```drltracelib.dll```. In turn, drltrace enumerates exported functions in the newly loaded DLL and registers a special callback for each of them. Thus, if some exported function would be called by malware, drltrace’s callback will be executed before this function and the tool will be able to log all required information such as a function name and arguments. Another callback might be registered after the function to save results of execution.
 
-Why not Intel PIN ? We decided to use DynamoRIO motivated by the following reasons:
+Why not Intel Pin ? We decided to use DynamoRIO motivated by the following reasons:
 
 1.	The source code of DynamoRIO is available on github.com and distributed under BSD license while Intel Pin is a proprietary software.
 2.	One of the basic requirements for DynamoRIO at the time of development was transparency towards the instrumented executable.
@@ -156,7 +155,7 @@ Why not Intel PIN ? We decided to use DynamoRIO motivated by the following reaso
 
 Our issue tracker contains more details about future of drltrace.
 
-# Authors
+# Acknowledgments
 Maksim Shudrak https://github.com/mxmssh
 
 Derek Bruening https://github.com/derekbruening
