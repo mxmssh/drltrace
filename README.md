@@ -137,7 +137,7 @@ Why not Intel PIN ? We decided to use DynamoRIO motivated by the following reaso
 3.	DynamoRIO uses different technology of instrumentation based on code transformation while Intel PIN uses special trampolines which is not transparent towards analyzed executable and might be detected by malware.
 
 # Future Work
-1. While drltrace is not detectable by standard anti-research tricks, DBI-engine itself can be detected as shown in these works [1](https://www.youtube.com/watch?v=VGmvx2B5qdo) [2](https://www.coresecurity.com/blog/recon-2012-presentation-detecting-dynamic-binary-instrumentation-frameworks). Making DynamoRIO resistant against these tricks is important path for future work.
+1. While drltrace is not detectable by standard anti-research tricks, DBI-engine itself can be detected as shown in these works [1](https://www.youtube.com/watch?v=VGmvx2B5qdo) [2](https://recon.cx/2012/schedule/events/216.en.html). Making DynamoRIO resistant against these tricks is important path for future work.
 2. Currently, drltrace prints a raw log and provides several scripts to print important strings and library calls. In future, we plan to add heuristics (probably by applying YARA rules) to be able to select indicative behavior from malware automatically.
 2. Currently, DynamoRIO has beta support of ARM architecture, testing and porting drltrace on ARM is required.
 3. Drltrace doesn’t support situation when malware injects code in a remote process. In such cases, it is possible to tell DynamoRIO inject drltrace in all newly created processes (```-syswide_on option``` of ```drrun.exe```). However, in future, it is necessary to implement a special support in drltrace for such situations.
