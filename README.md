@@ -141,5 +141,7 @@ Why not Intel PIN ? We decided to use DynamoRIO motivated by the following reaso
 2. Currently, DynamoRIO has beta support of ARM architecture, testing and porting drltrace on ARM is required.
 3. Drltrace doesn’t support situation when malware injects code in a remote process. In such cases, it is possible to tell DynamoRIO inject drltrace in all newly created processes (```-syswide_on option``` of ```drrun.exe```). However, in future, it is necessary to implement a special support in drltrace for such situations.
 
+Our issue tracker contains more details about future of drltrace.
+
 # Authors
 TODO
