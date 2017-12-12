@@ -112,8 +112,21 @@ Each function argument should be separated by ```|```. The first argument is ret
 
 You can find examples of how to use Drltrace for analysis of complex malware at our [Wiki page](https://github.com/mxmssh/drltrace/wiki/Malware-Analysis-Examples).
 
-# How to Build
+# Log Visualization
 
+To make the work with log files easier, we have implemented a script called api_calls_viz.py which can be used to generate RGB images where each pixel represent unique API call. For example, the picture below represents log file of ???? malware.
+
+PICTURE HERE
+
+You can easily find that the first part of the image (which has certain structure) is unpacking process.
+
+The script can also generate an HTML representation of generated RGB image where each element can be selected to show a name of API call.
+
+PICTURE HERE
+
+See the api_calls_viz [directory](https://github.com/mxmssh/drltrace/tree/master/api_calls_viz) for more details.
+
+# How to Build
 You can find a detailed manual at this [Wiki page](https://github.com/mxmssh/drltrace/wiki/How-To-Build).
 
 # OS Support
@@ -139,7 +152,7 @@ Why not Intel PIN ? We decided to use DynamoRIO motivated by the following reaso
 1. While drltrace is not detectable by standard anti-research tricks, DBI-engine itself can be detected as shown in these works [1](https://www.youtube.com/watch?v=VGmvx2B5qdo) [2](https://recon.cx/2012/schedule/events/216.en.html). Making DynamoRIO resistant against these tricks is important path for future work.
 2. Currently, drltrace prints a raw log and provides several scripts to print important strings and library calls. In future, we plan to add heuristics (probably by applying YARA rules) to be able to select indicative behavior from malware automatically.
 2. Currently, DynamoRIO has beta support of ARM architecture, testing and porting drltrace on ARM is required.
-3. Drltrace doesn’t support situation when malware injects code in a remote process. In such cases, it is possible to tell DynamoRIO inject drltrace in all newly created processes (```-syswide_on option``` of ```drrun.exe```). However, in future, it is necessary to implement a special support in drltrace for such situations.
+3. Drltrace doesn’t support situation when malware injects code in a remote process. In such cases, it is possible to tell DynamoRIO inject drltrace in all newly created processes (```-syswide_on``` option of ```drrun.exe```). However, in future, it is necessary to implement a special support in drltrace for such situations.
 
 Our issue tracker contains more details about future of drltrace.
 
