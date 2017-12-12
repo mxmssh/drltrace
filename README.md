@@ -9,17 +9,19 @@ BSD.
 <Some intro>
 Sophisticated software packers like Themida and Armadillo and of course dozens of unnamed packers written by malware authors plus code & data encryption significantly facilitate (in some cases making it completely impossible) static reverse engineering of such samples thereby delaying detection. In such case, API calls tracing can significantly reduce amount of time required to understand an actual malicious intent and ?????.  <More motivation for API calls tracing>.
 
-While traditional technique of API-hooking technique was successfully implemented in several solutions[link], the approach is well studied by malware authors and can be easily detected and/or bypassed as shown in these works [6] [7]. Moreover, these tools are distributed as standalone heavy-weight GUI applications (as a proprietary products) which are not often easy to integrate within existent malware analysis workflow.
+While traditional technique of API-hooking technique was successfully implemented in several solutions[link], the approach is well studied by malware authors and can be easily detected and/or bypassed. Moreover, these tools are distributed as standalone heavy-weight GUI applications (as proprietary products) which are not often easy to integrate within existent malware analysis workflow.
 
 If we look on Linux world, there is a wonderful tool called [ltrace](https://linux.die.net/man/1/ltrace). Using a single bash command, we can easily get the full trace of API calls of a certain executable. 
 
 **Why don’t we have such tool (like ltrace in Linux) for Windows which is also transparent against anti-research tricks used by modern malware?**
 
-It turns that there is a technique that can help us to have such tool for Windows and trace API calls transparently towards executed program. This technique is called dynamic binary instrumentation aka DBI. DBI is a technique of analyzing the behavior of a binary application at runtime through the injection of instrumentation code. 
+It turns that there is a technique that can help us to have such tool for Windows and trace API calls transparently towards executed program. This technique is called dynamic binary instrumentation aka DBI. DBI is a technique of analyzing the behavior of a binary application at runtime through the injection of instrumentation code.
+
+However, application of DBI for malware analysis is undeservedly limited by unpacking automatization and several proofs of concepts for instructions, basic blocks and function calls tracing. Drltrace is a first tool for API calls tracing based on DBI which can be used in practice for malware analysis. We provided several malware analysis examples in our [wiki](https://github.com/mxmssh/drltrace/wiki/Malware-Analysis-Examples) where we described how drltrace allowed to revel in several minutes a lot of internal technical details about sophisticated malicious samples without even starting IDA or debugger.
 
 # Why Drltrace Rock ?
 - Fast enough to perform analysis of malicious samples without being detected by time-based anti-research techniques.
-![alt text](github/DrLtrace-Performance.png)
+![alt text](pictures/DrLtrace-Performance.png)
 - Supports both x86 and x64 (ARM in future).
 - Supports both Windows and Linux (macOS in future).
 - Supports self-modifying code.
@@ -65,7 +67,6 @@ arg [arg #]: [value] (type=[Windows type name], size=[size of arg])
 and return to module id:[module unique id], offset:[offset in memory]
 ```
 The module unique identifiers table is printed at the end of the log file:
-
 ```
 Module Table: version 3, count 70
 Columns: id, containing_id, start, end, entry, checksum, timestamp, path
@@ -110,7 +111,7 @@ Each function argument should be separated by ```|```. The first argument is ret
 
 # Malware Analysis Examples
 
-You can find examples of how to use Drltrace for analysis of complex malware at our [Wiki page](https://github.com/mxmssh/drltrace/wiki/Malware-Analysis-Examples). *At this page we described how drltrace allowed us to revel in several minutes a lot of internal technical details without even starting IDA or debugger about several sophisticated malicious samples.*
+You can find examples of how to use Drltrace for analysis of complex malware at our [Wiki page](https://github.com/mxmssh/drltrace/wiki/Malware-Analysis-Examples).
 
 # How to Build
 
@@ -127,7 +128,7 @@ C and C++ standard libraries (and logs handling scripts written in Python).
 
 # Technical Details
 
-We decided to implement our API calls tracer on top of dynamic binary instrumentation framework DynamoRIO[link]. Drltrace asks DynamoRIO to perform instrumentation of LoadLibrary call to be able to handle new libraries being loaded by the target process. When the process tries to load a new library, DynamoRIO redirects control flow to ```drltracelib.dll```. In turn, drltrace enumerates exported functions in the newly loaded DLL and registers a special callback for each of them. Thus, if some exported function would be called by malware, drltrace’s callback will be executed before this function and the tool will be able to log all required information such as a function name and arguments. Another callback might be registered after the function to save results of execution.
+We decided to implement our API calls tracer on top of dynamic binary instrumentation framework [DynamoRIO](http://www.dynamorio.org/). Drltrace asks DynamoRIO to perform instrumentation of LoadLibrary call to be able to handle new libraries being loaded by the target process. When the process tries to load a new library, DynamoRIO redirects control flow to ```drltracelib.dll```. In turn, drltrace enumerates exported functions in the newly loaded DLL and registers a special callback for each of them. Thus, if some exported function would be called by malware, drltrace’s callback will be executed before this function and the tool will be able to log all required information such as a function name and arguments. Another callback might be registered after the function to save results of execution.
 
 Why not Intel PIN ? We decided to use DynamoRIO motivated by the following reasons:
 
@@ -145,4 +146,5 @@ Our issue tracker contains more details about future of drltrace.
 
 # Authors
 Maksim Shudrak https://github.com/mxmssh
+
 Derek Bruening https://github.com/derekbruening
