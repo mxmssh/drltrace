@@ -126,11 +126,16 @@ While files attrib.exe and cmd.exe looks like a standard windows processes, file
 
 At the beginning we see Gootkit allocates memory with activated ```PAGE_EXECUTE``` permission. So, it looks like the sample is preparing place to unpack and execute some code.
 
-![alt text](Gootkit-allocmem.png)
+<p>
+  <img src="Gootkit-allocmem.png" width="500"/>
+</p>
 
 Next, the sample gets command line and compares itself name with ```mstsc.exe``` (standard Windows RDP client).
 
-![alt text](github/Gootkit-getcmd.png)
+<p>
+  <img src="github/Gootkit-getcmd.png" width="700"/>
+</p>
+
 ![alt text](github/gootkit-strstriw.png)
 
 Few hundred API-calls after, we see ```CreateProcess``` API call where legitimate ```mstsc.exe``` is called with an argument that points to the path of our Gootkit.
@@ -138,20 +143,30 @@ Few hundred API-calls after, we see ```CreateProcess``` API call where legitimat
 ![alt text](github/Gootkit-newproc2.png)
 
 Since ```mstsc.exe``` was started suspended, we can expect process hollowing technique further. The next figure proves our guess. The sample takes context of a remote thread, creates a new section, maps the section in memory, writes the code in the remote process and resume the thread.
-
-![alt text](github/Gootkit-getcontext.png)
-![alt text](github/Gootkit-createsection.png)
-![alt text](github/gootkit-injectmemory.png)
+<p>
+  <img src="github/Gootkit-getcontext.png" width="500"/>
+</p>
+<p>
+  <img src="github/Gootkit-createsection.png" width="500"/>
+</p>
+<p>
+  <img src="github/gootkit-injectmemory.png" width="500"/>
+</p>
 
 The rest of the main log file is not interesting. Let’s switch to the log of ```mstsc.exe```. 
 
 At the beginning, we can see our malware joking at us.
 
-![alt text](github/gootkit-trololo.png)
+<p>
+  <img src="github/gootkit-trololo.png" width="500"/>
+</p>
 
 After a few hundred lines, infected ```mstsc.exe``` starts a huge loop where it enumerates all the processes running in the memory looking for specific names for anti-research purposes (see our technical [report](https://drive.google.com/file/d/0BzFSoGMCVlTORUExdF9RTklpX3c/view) for more details).
 
-![alt text](github/Gootkit-enumerate.png)
+
+<p>
+  <img src="github/Gootkit-enumerate.png" width="500"/>
+</p>
 
 After this long loop, the sample removes itself by dropping bat file ```36197379.bat``` and executing it (our previous intuition about ```cmd.exe``` and ```attrib.exe``` was right).
 
