@@ -144,4 +144,5 @@ Why not Intel PIN ? We decided to use DynamoRIO motivated by the following reaso
 Our issue tracker contains more details about future of drltrace.
 
 # Authors
-TODO
+Maksim Shudrak https://github.com/mxmssh
+Derek Bruening https://github.com/derekbruening
