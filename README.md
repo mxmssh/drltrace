@@ -114,7 +114,7 @@ You can find examples of how to use Drltrace for analysis of complex malware at 
 
 # Log Visualization
 
-To make the work with log files easier, we have implemented a script called api_calls_viz.py which can be used to generate RGB images where each pixel represent unique API call. For example, the picture below represents log file of ???? malware.
+To make the work with log files easier, we have implemented a script called ```api_calls_viz.py``` which can be used to generate RGB images where each pixel represent unique API call. For example, the picture below represents log file of ???? malware.
 
 PICTURE HERE
 
@@ -124,7 +124,7 @@ The script can also generate an HTML representation of generated RGB image where
 
 PICTURE HERE
 
-See the api_calls_viz [directory](https://github.com/mxmssh/drltrace/tree/master/api_calls_viz) for more details.
+See the ```api_calls_viz``` [directory](https://github.com/mxmssh/drltrace/tree/master/api_calls_viz) for more details.
 
 # How to Build
 You can find a detailed manual at this [Wiki page](https://github.com/mxmssh/drltrace/wiki/How-To-Build).
