@@ -144,7 +144,7 @@ Few hundred API-calls after, we see ```CreateProcess``` API call where legitimat
 
 Since ```mstsc.exe``` was started suspended, we can expect process hollowing technique further. The next figure proves our guess. The sample takes context of a remote thread, creates a new section, maps the section in memory, writes the code in the remote process and resume the thread.
 <p>
-  <img src="github/Gootkit-getcontext.png" width="500"/>
+  <img src="github/Gootkit-getcontext.png" width="400"/>
 </p>
 <p>
   <img src="github/Gootkit-createsection.png" width="500"/>
