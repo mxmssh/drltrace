@@ -21,7 +21,6 @@ However, application of DBI for malware analysis is undeservedly limited by unpa
 
 # Why Drltrace Rock ?
 - Fast enough to perform analysis of malicious samples without being detected by time-based anti-research techniques.
-![alt text](pictures/DrLtrace-Performance.png)
 - Supports both x86 and x64 (ARM in future).
 - Supports both Windows and Linux (macOS in future).
 - Supports self-modifying code.
