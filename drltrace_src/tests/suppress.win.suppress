@@ -1,0 +1,150 @@
+# **********************************************************
+# Copyright (c) 2010-2013 Google, Inc.  All rights reserved.
+# Copyright (c) 2009-2010 VMware, Inc.  All rights reserved.
+# **********************************************************
+#
+# Dr. Memory: the memory debugger
+#
+# This library is free software; you can redistribute it and/or
+# modify it under the terms of the GNU Lesser General Public
+# License as published by the Free Software Foundation;
+# version 2.1 of the License, and no later version.
+#
+# This library is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+# Library General Public License for more details.
+#
+# You should have received a copy of the GNU Lesser General Public
+# License along with this library; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+
+# uninitialized read: plain
+UNINITIALIZED READ
+name=uninit_test1 plain
+suppress.exe!do_uninit_read
+suppress.exe!uninit_test1
+suppress.exe!test
+suppress.exe!main
+
+# uninitialized read: valgrind-style
+{
+  uninit_test2 *
+  Memcheck:Value1
+  fun:do_u*t_read
+  fun:uninit_test2
+  fun:test
+}
+
+# uninitialized read: 4 top frames based mixed suppression + '?'
+UNINITIALIZED READ
+name=uninit_test3 mixed
+<suppress.exe+0x1???>
+suppress.exe!uninit_test3
+<suppress.exe+0x1???>
+suppress.exe!main
+
+# uninitialized read: mixed suppression with ... (...=0 frames)
+UNINITIALIZED READ
+name=uninit_test4 mixed and ...
+<suppress.exe+0x1???>
+...
+suppress.exe!uninit_test4
+
+# uninitialized read: ... + mod!func suppression
+# "..." should match one frame
+UNINITIALIZED READ
+name=uninit_test5 ... match 1
+...
+suppress.exe!uninit_test5
+
+# uninitialized read: ... + mod!func suppression
+# "..." should match five frames
+UNINITIALIZED READ
+name=uninit_test6 ... match 6
+suppress.exe!do_uninit_read
+...
+suppress.exe!uninit_test6
+
+# uninitialized read: ... + ? + mod!off suppression
+UNINITIALIZED READ
+name=uninit_test7 ... + ? + mod!off suppression
+...
+suppress.exe!uninit_test7
+...
+<su?pr?ss.exe+0x1???>
+
+# uninitialized read: two mod!...
+UNINITIALIZED READ
+name=mod_ellipsis_test two mod!...
+suppress.exe!...
+suppress-mod-bar.dll!...
+suppress.exe!call_into_bar
+suppress-mod-foo.dll!...
+suppress.exe!mod_ellipsis_test
+
+#-------------------------------------------------------------------------------
+
+# unaddressable access: plain
+UNADDRESSABLE ACCESS
+name=unaddr_test1 plain
+suppress.exe!unaddr_test1
+suppress.exe!test
+suppress.exe!main
+
+# unaddressable access: wildcard in module
+#
+UNADDRESSABLE ACCESS
+name=unaddr_test2 *
+supp*!unaddr_test2
+
+# unaddressable access: restrict based on instruction
+UNADDRESSABLE ACCESS
+name=unaddr_test3 instruction
+# test trailing spaces here
+instruction=mov    (%eax) -> %e?x
+suppress.exe!unaddr_test3
+suppress.exe!test
+suppress.exe!main
+
+# unaddressable access: top frame based mod!func suppression
+UNADDRESSABLE ACCESS
+name=unaddr_test4 top
+suppress.exe!unaddr_test4
+
+#-------------------------------------------------------------------------------
+# leak: plain
+LEAK
+name=leak_test1 plain
+suppress.exe!leak_test1
+suppress.exe!test
+suppress.exe!main
+
+# leak: top frame
+#
+LEAK
+name=leak_test2 *
+suppress.exe!l*2
+
+# leak: full callstack based mod!func suppression
+LEAK
+name=leak_test3 ?
+sup?re?s.e?e!l??k_test3
+suppress.exe!test
+suppress.exe!main
+
+# leak: top frame based mod!func suppression
+LEAK
+name=leak_test4 top
+suppress.exe!leak_test4
+
+# possible leak: top frame based mod!func suppression
+POSSIBLE LEAK
+name=possible_leak_test1 top
+suppress.exe!possible_leak_test1
+
+# possible leak: top frame based mod!func suppression
+LEAK
+name=possible_leak_test2 w/ leak supp
+suppress.exe!possible_leak_test2
+

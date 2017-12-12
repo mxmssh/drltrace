@@ -1,0 +1,851 @@
+Index: common/_elftc.h
+===================================================================
+--- common/_elftc.h	(revision 3248)
++++ common/_elftc.h	(working copy)
+@@ -323,6 +323,10 @@
+ #endif	/* __GNUC__ */
+ #endif
+ 
++#ifdef _MSC_VER
++# define ELFTC_VCSID(ID) /* nothing */
++#endif
++
+ #endif	/* ELFTC_VCSID */
+ 
+ /*
+Index: libdwarf/Makefile
+===================================================================
+--- libdwarf/Makefile	(revision 3248)
++++ libdwarf/Makefile	(working copy)
+@@ -54,8 +54,6 @@
+ 	libdwarf_attr.c		\
+ 	libdwarf_die.c		\
+ 	libdwarf_error.c	\
+-	libdwarf_elf_access.c	\
+-	libdwarf_elf_init.c	\
+ 	libdwarf_frame.c	\
+ 	libdwarf_info.c		\
+ 	libdwarf_init.c		\
+@@ -68,8 +66,13 @@
+ 	libdwarf_reloc.c	\
+ 	libdwarf_rw.c		\
+ 	libdwarf_sections.c	\
+-	libdwarf_str.c
++	libdwarf_str.c          \
++        libdwarf_pecoff_init.c  \
++        libdwarf_pecoff_access.c
+ 
++#	libdwarf_elf_access.c	
++#	libdwarf_elf_init.c	
++
+ INCS=		dwarf.h libdwarf.h
+ INCSDIR=	/usr/include
+ 
+Index: libdwarf/_libdwarf.h
+===================================================================
+--- libdwarf/_libdwarf.h	(revision 3248)
++++ libdwarf/_libdwarf.h	(working copy)
+@@ -30,6 +30,11 @@
+ #ifndef	__LIBDWARF_H_
+ #define	__LIBDWARF_H_
+ 
++#ifdef _MSC_VER
++# define __func__ __FUNCTION__
++# define snprintf _snprintf
++#endif
++
+ #include <sys/param.h>
+ #include <sys/queue.h>
+ #include <assert.h>
+@@ -378,7 +383,24 @@
+ 	STAILQ_ENTRY(_Dwarf_Rel_Section) drs_next; /* Next reloc section. */
+ } *Dwarf_Rel_Section;
+ 
++#ifdef _MSC_VER
+ typedef struct {
++	Dwarf_Addr addr;
++	Dwarf_Unsigned size;
++	const char *name;
++        char *name_alloc;
++} Dwarf_PECoff_Section;
++
++typedef struct {
++        Dwarf_Ptr       map_base;
++        Dwarf_Bool      is_64;
++        const char *    string_table;
++        Dwarf_Unsigned  seccnt;
++        Dwarf_PECoff_Section *sec;
++	Dwarf_Obj_Access_Methods eo_methods;
++} Dwarf_PECoff_Object;
++#else
++typedef struct {
+ 	Elf_Data *ed_data;
+ 	void *ed_alloc;
+ } Dwarf_Elf_Data;
+@@ -392,6 +414,7 @@
+ 	size_t		eo_strndx;
+ 	Dwarf_Obj_Access_Methods eo_methods;
+ } Dwarf_Elf_Object;
++#endif
+ 
+ struct _Dwarf_Debug {
+ 	Dwarf_Obj_Access_Interface *dbg_iface;
+@@ -523,6 +546,18 @@
+ int		_dwarf_die_parse(Dwarf_Debug, Dwarf_Section *, Dwarf_CU, int,
+ 		    uint64_t, uint64_t, Dwarf_Die *, int, Dwarf_Error *);
+ void		_dwarf_die_pro_cleanup(Dwarf_P_Debug);
++#ifdef _MSC_VER
++void		_dwarf_pecoff_deinit(Dwarf_Debug);
++int		_dwarf_pecoff_init(Dwarf_Debug, Dwarf_Ptr, Dwarf_Error *);
++int		_dwarf_pecoff_load_section(void *, Dwarf_Half, Dwarf_Small **,
++		    int *);
++Dwarf_Endianness _dwarf_pecoff_get_byte_order(void *);
++Dwarf_Small	_dwarf_pecoff_get_length_size(void *);
++Dwarf_Small	_dwarf_pecoff_get_pointer_size(void *);
++Dwarf_Unsigned	_dwarf_pecoff_get_section_count(void *);
++int		_dwarf_pecoff_get_section_info(void *, Dwarf_Half,
++		    Dwarf_Obj_Access_Section *, int *);
++#else
+ void		_dwarf_elf_deinit(Dwarf_Debug);
+ int		_dwarf_elf_init(Dwarf_Debug, Elf *, Dwarf_Error *);
+ int		_dwarf_elf_load_section(void *, Dwarf_Half, Dwarf_Small **,
+@@ -533,6 +568,7 @@
+ Dwarf_Unsigned	_dwarf_elf_get_section_count(void *);
+ int		_dwarf_elf_get_section_info(void *, Dwarf_Half,
+ 		    Dwarf_Obj_Access_Section *, int *);
++#endif
+ void		_dwarf_expr_cleanup(Dwarf_P_Debug);
+ int		_dwarf_expr_into_block(Dwarf_P_Expr, Dwarf_Error *);
+ Dwarf_Section	*_dwarf_find_next_types_section(Dwarf_Debug, Dwarf_Section *);
+Index: libdwarf/dwarf_errmsg.c
+===================================================================
+--- libdwarf/dwarf_errmsg.c	(revision 3248)
++++ libdwarf/dwarf_errmsg.c	(working copy)
+@@ -29,12 +29,16 @@
+ ELFTC_VCSID("$Id$");
+ 
+ static const char *_libdwarf_errors[] = {
++#ifdef _MSC_VER
++#define	DEFINE_ERROR(N,S)		S
++#else
+ #define	DEFINE_ERROR(N,S)		[DW_DLE_##N] = S
++#endif
+ 	DEFINE_ERROR(NONE, "No Error"),
+ 	DEFINE_ERROR(ERROR, "An error"),
+-	DEFINE_ERROR(NO_ENTRY, "No entry found"),
+ 	DEFINE_ERROR(ARGUMENT, "Invalid argument"),
+ 	DEFINE_ERROR(DEBUG_INFO_NULL, "Debug info NULL"),
++	DEFINE_ERROR(NO_ENTRY, "No entry found"),
+ 	DEFINE_ERROR(MEMORY, "Insufficient memory"),
+ 	DEFINE_ERROR(ELF, "ELF error"),
+ 	DEFINE_ERROR(CU_LENGTH_ERROR, "Invalid compilation unit data"),
+@@ -80,7 +84,11 @@
+ 
+ 	if (error->err_error == DW_DLE_ELF)
+ 		snprintf(error->err_msg, sizeof(error->err_msg),
++#ifdef _MSC_VER
++		    "ELF error : %d [%s(%d)]", error->err_elferror,
++#else
+ 		    "ELF error : %s [%s(%d)]", elf_errmsg(error->err_elferror),
++#endif
+ 		    error->err_func, error->err_line);
+ 	else
+ 		snprintf(error->err_msg, sizeof(error->err_msg),
+Index: libdwarf/dwarf_finish.c
+===================================================================
+--- libdwarf/dwarf_finish.c	(revision 3248)
++++ libdwarf/dwarf_finish.c	(working copy)
+@@ -37,7 +37,11 @@
+ 		return (DW_DLV_OK);
+ 
+ 	_dwarf_deinit(dbg);
++#ifdef _MSC_VER
++	_dwarf_pecoff_deinit(dbg);
++#else
+ 	_dwarf_elf_deinit(dbg);
++#endif
+ 
+ 	free(dbg);
+ 
+Index: libdwarf/dwarf_init.c
+===================================================================
+--- libdwarf/dwarf_init.c	(revision 3248)
++++ libdwarf/dwarf_init.c	(working copy)
+@@ -29,7 +29,48 @@
+ 
+ ELFTC_VCSID("$Id$");
+ 
++#ifdef _MSC_VER
+ int
++dwarf_pecoff_init(Dwarf_Ptr map_base, int mode, Dwarf_Handler errhand, Dwarf_Ptr errarg,
++    Dwarf_Debug *ret_dbg, Dwarf_Error *error)
++{
++	Dwarf_Debug dbg;
++	int ret;
++
++	if (map_base == NULL || ret_dbg == NULL) {
++		DWARF_SET_ERROR(NULL, error, DW_DLE_ARGUMENT);
++		return (DW_DLV_ERROR);
++	}
++
++	if (mode != DW_DLC_READ) {
++		DWARF_SET_ERROR(NULL, error, DW_DLE_ARGUMENT);
++		return (DW_DLV_ERROR);
++	}
++
++	if (_dwarf_alloc(&dbg, mode, error) != DW_DLE_NONE)
++		return (DW_DLV_ERROR);
++
++	if (_dwarf_pecoff_init(dbg, map_base, error) != DW_DLE_NONE) {
++		free(dbg);
++		return (DW_DLV_ERROR);
++	}
++
++	if ((ret = _dwarf_init(dbg, 0, errhand, errarg, error)) !=
++	    DW_DLE_NONE) {
++		_dwarf_pecoff_deinit(dbg);
++		free(dbg);
++		if (ret == DW_DLE_DEBUG_INFO_NULL)
++			return (DW_DLV_NO_ENTRY);
++		else
++			return (DW_DLV_ERROR);
++	}
++
++	*ret_dbg = dbg;
++
++	return (DW_DLV_OK);
++}
++#else
++int
+ dwarf_elf_init(Elf *elf, int mode, Dwarf_Handler errhand, Dwarf_Ptr errarg,
+     Dwarf_Debug *ret_dbg, Dwarf_Error *error)
+ {
+@@ -135,6 +176,7 @@
+ 
+ 	return (DW_DLV_OK);
+ }
++#endif /*_MSC_VER */
+ 
+ int
+ dwarf_object_init(Dwarf_Obj_Access_Interface *iface, Dwarf_Handler errhand,
+Index: libdwarf/libdwarf.c
+===================================================================
+--- libdwarf/libdwarf.c	(revision 3248)
++++ libdwarf/libdwarf.c	(working copy)
+@@ -29,7 +29,13 @@
+ ELFTC_VCSID("$Id$");
+ 
+ struct _libdwarf_globals _libdwarf = {
++#ifdef _MSC_VER
++    /*.errhand	= */NULL,
++    /*.errarg		= */NULL,
++    /*.applyrela	= */1
++#else
+ 	.errhand	= NULL,
+ 	.errarg		= NULL,
+ 	.applyreloc	= 1
++#endif
+ };
+Index: libdwarf/libdwarf.h
+===================================================================
+--- libdwarf/libdwarf.h	(revision 3248)
++++ libdwarf/libdwarf.h	(working copy)
+@@ -544,8 +544,13 @@
+ 		    Dwarf_P_Die, Dwarf_P_Die, Dwarf_Error *);
+ int		dwarf_diename(Dwarf_Die, char **, Dwarf_Error *);
+ int		dwarf_dieoffset(Dwarf_Die, Dwarf_Off *, Dwarf_Error *);
++#ifndef _MSC_VER
+ int		dwarf_elf_init(Elf *, int, Dwarf_Handler, Dwarf_Ptr,
+ 		    Dwarf_Debug *, Dwarf_Error *);
++#else
++int		dwarf_pecoff_init(Dwarf_Ptr, int, Dwarf_Handler, Dwarf_Ptr,
++		    Dwarf_Debug *, Dwarf_Error *);
++#endif
+ int		dwarf_end_macro_file(Dwarf_P_Debug, Dwarf_Error *);
+ const char	*dwarf_errmsg_(Dwarf_Error *);
+ int		dwarf_expand_frame_instructions(Dwarf_Cie, Dwarf_Ptr,
+@@ -631,7 +636,9 @@
+ int		dwarf_get_cu_die_offset_given_cu_header_offset_b(Dwarf_Debug,
+ 		    Dwarf_Off, Dwarf_Bool, Dwarf_Off *, Dwarf_Error *);
+ Dwarf_Bool	dwarf_get_die_infotypes_flag(Dwarf_Die);
++#ifndef _MSC_VER
+ int		dwarf_get_elf(Dwarf_Debug, Elf **, Dwarf_Error *);
++#endif
+ int		dwarf_get_fde_at_pc(Dwarf_Fde *, Dwarf_Addr, Dwarf_Fde *,
+ 		    Dwarf_Addr *, Dwarf_Addr *, Dwarf_Error *);
+ int		dwarf_get_fde_info_for_all_regs(Dwarf_Fde, Dwarf_Addr,
+Index: libelf/_libelf_config.h
+===================================================================
+--- libelf/_libelf_config.h	(revision 3248)
++++ libelf/_libelf_config.h	(working copy)
+@@ -151,6 +151,12 @@
+ 
+ #endif
+ 
++#ifdef _MSC_VER
++#define LIBELF_ARCH      EM_386
++#define LIBELF_BYTEORDER ELFDATA2LSB
++#define LIBELF_CLASS     ELFCLASS32
++#endif
++
+ /*
+  * GNU & Linux compatibility.
+  *
+Index: libelf/libelf.h
+===================================================================
+--- libelf/libelf.h	(revision 3248)
++++ libelf/libelf.h	(working copy)
+@@ -29,6 +29,11 @@
+ #ifndef	_LIBELF_H_
+ #define	_LIBELF_H_
+ 
++#ifdef _MSC_VER
++# include <windows.h>
++# include <sys/cdefs.h>
++#endif
++
+ #include <sys/types.h>
+ 
+ #include <elfdefinitions.h>
+Index: libelftc/_libelftc.h
+===================================================================
+--- libelftc/_libelftc.h	(revision 3248)
++++ libelftc/_libelftc.h	(working copy)
+@@ -32,6 +32,10 @@
+ 
+ #include <stdbool.h>
+ 
++#ifdef _MSC_VER
++# define snprintf _snprintf
++#endif
++
+ #include "_elftc.h"
+ 
+ struct _Elftc_Bfd_Target {
+Index: libelftc/elftc_demangle.c
+===================================================================
+--- libelftc/elftc_demangle.c	(revision 3248)
++++ libelftc/elftc_demangle.c	(working copy)
+@@ -78,30 +78,33 @@
+ {
+ 	int style, rc;
+ 	char *rlt;
++        size_t len_needed;
+ 
+ 	style = flags & 0xFFFF;
+ 	rc = flags >> 16;
+ 
+ 	if (mangledname == NULL ||
++            buffer == NULL ||
+ 	    ((style = is_mangled(mangledname, style)) == 0)) {
+ 		errno = EINVAL;
+-		return (-1);
++		return -1;
+ 	}
+ 
+ 	if ((rlt = demangle(mangledname, style, rc)) == NULL) {
+ 		errno = EINVAL;
+-		return (-1);
++		return -1;
+ 	}
+ 
+-	if (buffer == NULL || bufsize < strlen(rlt) + 1) {
+-		free(rlt);
+-		errno = ENAMETOOLONG;
+-		return (-1);
+-	}
+-
+ 	strncpy(buffer, rlt, bufsize);
+ 	buffer[bufsize - 1] = '\0';
++
++        len_needed = strlen(rlt) + 1;
+ 	free(rlt);
+ 
+-	return (0);
++	if (bufsize < len_needed) {
++                /* not returning -1 so maybe no point in setting errno */
++		errno = ENAMETOOLONG;
++	}
++
++	return len_needed;
+ }
+Index: libelftc/libelftc.h
+===================================================================
+--- libelftc/libelftc.h	(revision 3248)
++++ libelftc/libelftc.h	(working copy)
+@@ -32,6 +32,11 @@
+ 
+ #include <sys/stat.h>
+ 
++#ifdef _MSC_VER
++#include <sys/cdefs.h>
++#include <stdint.h>
++#endif
++
+ #include <libelf.h>
+ 
+ /*
+Index: libelftc/libelftc_bfdtarget.c
+===================================================================
+--- libelftc/libelftc_bfdtarget.c	(revision 3248)
++++ libelftc/libelftc_bfdtarget.c	(working copy)
+@@ -33,8 +33,353 @@
+ ELFTC_VCSID("$Id$");
+ 
+ struct _Elftc_Bfd_Target _libelftc_targets[] = {
++#ifdef _MSC_VER
++	{
++		/* .bt_name = */ "binary",
++		/* .bt_type = */ ETF_BINARY,
++	},
+ 
+ 	{
++		/* .bt_name      = */ "elf32-avr",
++		/* .bt_type      = */ ETF_ELF,
++		/* .bt_byteorder = */ ELFDATA2LSB,
++		/* .bt_elfclass  = */ ELFCLASS32,
++		/* .bt_machine   = */ EM_AVR,
++	},
++
++	{
++		/* .bt_name      = */ "elf32-big",
++		/* .bt_type      = */ ETF_ELF,
++		/* .bt_byteorder = */ ELFDATA2MSB,
++		/* .bt_elfclass  = */ ELFCLASS32,
++	},
++
++	{
++		/* .bt_name      = */ "elf32-bigarm",
++		/* .bt_type      = */ ETF_ELF,
++		/* .bt_byteorder = */ ELFDATA2MSB,
++		/* .bt_elfclass  = */ ELFCLASS32,
++		/* .bt_machine   = */ EM_ARM,
++	},
++
++	{
++		/* .bt_name      = */ "elf32-bigmips",
++		/* .bt_type      = */ ETF_ELF,
++		/* .bt_byteorder = */ ELFDATA2MSB,
++		/* .bt_elfclass  = */ ELFCLASS32,
++		/* .bt_machine   = */ EM_MIPS,
++	},
++
++	{
++		/* .bt_name      = */ "elf32-i386",
++		/* .bt_type      = */ ETF_ELF,
++		/* .bt_byteorder = */ ELFDATA2LSB,
++		/* .bt_elfclass  = */ ELFCLASS32,
++		/* .bt_machine   = */ EM_386,
++	},
++
++	{
++		/* .bt_name      = */ "elf32-i386-freebsd",
++		/* .bt_type      = */ ETF_ELF,
++		/* .bt_byteorder = */ ELFDATA2LSB,
++		/* .bt_elfclass  = */ ELFCLASS32,
++		/* .bt_machine   = */ EM_386,
++		/* .bt_osabi     = */ ELFOSABI_FREEBSD,
++	},
++
++	{
++		/* .bt_name      = */ "elf32-ia64-big",
++		/* .bt_type      = */ ETF_ELF,
++		/* .bt_byteorder = */ ELFDATA2MSB,
++		/* .bt_elfclass  = */ ELFCLASS32,
++		/* .bt_machine   = */ EM_IA_64,
++	},
++
++	{
++		/* .bt_name      = */ "elf32-little",
++		/* .bt_type      = */ ETF_ELF,
++		/* .bt_byteorder = */ ELFDATA2LSB,
++		/* .bt_elfclass  = */ ELFCLASS32,
++	},
++
++	{
++		/* .bt_name      = */ "elf32-littlearm",
++		/* .bt_type      = */ ETF_ELF,
++		/* .bt_byteorder = */ ELFDATA2LSB,
++		/* .bt_elfclass  = */ ELFCLASS32,
++		/* .bt_machine   = */ EM_ARM,
++	},
++
++	{
++		/* .bt_name      = */ "elf32-littlemips",
++		/* .bt_type      = */ ETF_ELF,
++		/* .bt_byteorder = */ ELFDATA2LSB,
++		/* .bt_elfclass  = */ ELFCLASS32,
++		/* .bt_machine   = */ EM_MIPS,
++	},
++
++	{
++		/* .bt_name      = */ "elf32-powerpc",
++		/* .bt_type      = */ ETF_ELF,
++		/* .bt_byteorder = */ ELFDATA2MSB,
++		/* .bt_elfclass  = */ ELFCLASS32,
++		/* .bt_machine   = */ EM_PPC,
++	},
++
++	{
++		/* .bt_name      = */ "elf32-powerpcle",
++		/* .bt_type      = */ ETF_ELF,
++		/* .bt_byteorder = */ ELFDATA2LSB,
++		/* .bt_elfclass  = */ ELFCLASS32,
++		/* .bt_machine   = */ EM_PPC,
++	},
++
++	{
++		/* .bt_name      = */ "elf32-sh",
++		/* .bt_type      = */ ETF_ELF,
++		/* .bt_byteorder = */ ELFDATA2MSB,
++		/* .bt_elfclass  = */ ELFCLASS32,
++		/* .bt_machine   = */ EM_SH,
++	},
++
++	{
++		/* .bt_name      = */ "elf32-shl",
++		/* .bt_type      = */ ETF_ELF,
++		/* .bt_byteorder = */ ELFDATA2LSB,
++		/* .bt_elfclass  = */ ELFCLASS32,
++		/* .bt_machine   = */ EM_SH,
++	},
++
++	{
++		/* .bt_name      = */ "elf32-sh-nbsd",
++		/* .bt_type      = */ ETF_ELF,
++		/* .bt_byteorder = */ ELFDATA2MSB,
++		/* .bt_elfclass  = */ ELFCLASS32,
++		/* .bt_machine   = */ EM_SH,
++		/* .bt_osabi     = */ ELFOSABI_NETBSD,
++	},
++
++	{
++		/* .bt_name      = */ "elf32-shl-nbsd",
++		/* .bt_type      = */ ETF_ELF,
++		/* .bt_byteorder = */ ELFDATA2LSB,
++		/* .bt_elfclass  = */ ELFCLASS32,
++		/* .bt_machine   = */ EM_SH,
++		/* .bt_osabi     = */ ELFOSABI_NETBSD,
++	},
++
++	{
++		/* .bt_name      = */ "elf32-shbig-linux",
++		/* .bt_type      = */ ETF_ELF,
++		/* .bt_byteorder = */ ELFDATA2MSB,
++		/* .bt_elfclass  = */ ELFCLASS32,
++		/* .bt_machine   = */ EM_SH,
++		/* .bt_osabi     = */ ELFOSABI_LINUX,
++	},
++
++	{
++		/* .bt_name      = */ "elf32-sh-linux",
++		/* .bt_type      = */ ETF_ELF,
++		/* .bt_byteorder = */ ELFDATA2LSB,
++		/* .bt_elfclass  = */ ELFCLASS32,
++		/* .bt_machine   = */ EM_SH,
++		/* .bt_osabi     = */ ELFOSABI_LINUX,
++	},
++
++	{
++		/* .bt_name      = */ "elf32-sparc",
++		/* .bt_type      = */ ETF_ELF,
++		/* .bt_byteorder = */ ELFDATA2MSB,
++		/* .bt_elfclass  = */ ELFCLASS32,
++		/* .bt_machine   = */ EM_SPARC,
++	},
++
++	{
++		/* .bt_name      = */ "elf64-alpha",
++		/* .bt_type      = */ ETF_ELF,
++		/* .bt_byteorder = */ ELFDATA2LSB,
++		/* .bt_elfclass  = */ ELFCLASS64,
++		/* .bt_machine   = */ EM_ALPHA,
++	},
++
++	{
++		/* .bt_name      = */ "elf64-alpha-freebsd",
++		/* .bt_type      = */ ETF_ELF,
++		/* .bt_byteorder = */ ELFDATA2LSB,
++		/* .bt_elfclass  = */ ELFCLASS64,
++		/* .bt_machine   = */ EM_ALPHA,
++		/* .bt_osabi     = */ ELFOSABI_FREEBSD
++	},
++
++	{
++		/* .bt_name      = */ "elf64-big",
++		/* .bt_type      = */ ETF_ELF,
++		/* .bt_byteorder = */ ELFDATA2MSB,
++		/* .bt_elfclass  = */ ELFCLASS64,
++	},
++
++	{
++		/* .bt_name      = */ "elf64-bigmips",
++		/* .bt_type      = */ ETF_ELF,
++		/* .bt_byteorder = */ ELFDATA2MSB,
++		/* .bt_elfclass  = */ ELFCLASS64,
++		/* .bt_machine   = */ EM_MIPS,
++	},
++
++	{
++		/* .bt_name      = */ "elf64-ia64-big",
++		/* .bt_type      = */ ETF_ELF,
++		/* .bt_byteorder = */ ELFDATA2MSB,
++		/* .bt_elfclass  = */ ELFCLASS64,
++		/* .bt_machine   = */ EM_IA_64,
++	},
++
++	{
++		/* .bt_name      = */ "elf64-ia64-little",
++		/* .bt_type      = */ ETF_ELF,
++		/* .bt_byteorder = */ ELFDATA2LSB,
++		/* .bt_elfclass  = */ ELFCLASS64,
++		/* .bt_machine   = */ EM_IA_64,
++	},
++
++	{
++		/* .bt_name      = */ "elf64-little",
++		/* .bt_type      = */ ETF_ELF,
++		/* .bt_byteorder = */ ELFDATA2LSB,
++		/* .bt_elfclass  = */ ELFCLASS64,
++	},
++
++	{
++		/* .bt_name      = */ "elf64-littlemips",
++		/* .bt_type      = */ ETF_ELF,
++		/* .bt_byteorder = */ ELFDATA2LSB,
++		/* .bt_elfclass  = */ ELFCLASS64,
++		/* .bt_machine   = */ EM_MIPS,
++	},
++
++	{
++		/* .bt_name      = */ "elf64-powerpc",
++		/* .bt_type      = */ ETF_ELF,
++		/* .bt_byteorder = */ ELFDATA2MSB,
++		/* .bt_elfclass  = */ ELFCLASS64,
++		/* .bt_machine   = */ EM_PPC64,
++	},
++
++	{
++		/* .bt_name      = */ "elf64-powerpcle",
++		/* .bt_type      = */ ETF_ELF,
++		/* .bt_byteorder = */ ELFDATA2LSB,
++		/* .bt_elfclass  = */ ELFCLASS64,
++		/* .bt_machine   = */ EM_PPC64,
++	},
++
++	{
++		/* .bt_name      = */ "elf64-sh64",
++		/* .bt_type      = */ ETF_ELF,
++		/* .bt_byteorder = */ ELFDATA2MSB,
++		/* .bt_elfclass  = */ ELFCLASS64,
++		/* .bt_machine   = */ EM_SH,
++	},
++
++	{
++		/* .bt_name      = */ "elf64-sh64l",
++		/* .bt_type      = */ ETF_ELF,
++		/* .bt_byteorder = */ ELFDATA2LSB,
++		/* .bt_elfclass  = */ ELFCLASS64,
++		/* .bt_machine   = */ EM_SH,
++	},
++
++	{
++		/* .bt_name      = */ "elf64-sh64-nbsd",
++		/* .bt_type      = */ ETF_ELF,
++		/* .bt_byteorder = */ ELFDATA2MSB,
++		/* .bt_elfclass  = */ ELFCLASS64,
++		/* .bt_machine   = */ EM_SH,
++		/* .bt_osabi     = */ ELFOSABI_NETBSD,
++	},
++
++	{
++		/* .bt_name      = */ "elf64-sh64l-nbsd",
++		/* .bt_type      = */ ETF_ELF,
++		/* .bt_byteorder = */ ELFDATA2LSB,
++		/* .bt_elfclass  = */ ELFCLASS64,
++		/* .bt_machine   = */ EM_SH,
++		/* .bt_osabi     = */ ELFOSABI_NETBSD,
++	},
++
++	{
++		/* .bt_name      = */ "elf64-sh64big-linux",
++		/* .bt_type      = */ ETF_ELF,
++		/* .bt_byteorder = */ ELFDATA2MSB,
++		/* .bt_elfclass  = */ ELFCLASS64,
++		/* .bt_machine   = */ EM_SH,
++		/* .bt_osabi     = */ ELFOSABI_LINUX,
++	},
++
++	{
++		/* .bt_name      = */ "elf64-sh64-linux",
++		/* .bt_type      = */ ETF_ELF,
++		/* .bt_byteorder = */ ELFDATA2LSB,
++		/* .bt_elfclass  = */ ELFCLASS64,
++		/* .bt_machine   = */ EM_SH,
++		/* .bt_osabi     = */ ELFOSABI_LINUX,
++	},
++
++	{
++		/* .bt_name      = */ "elf64-sparc",
++		/* .bt_type      = */ ETF_ELF,
++		/* .bt_byteorder = */ ELFDATA2MSB,
++		/* .bt_elfclass  = */ ELFCLASS64,
++		/* .bt_machine   = */ EM_SPARCV9,
++	},
++
++	{
++		/* .bt_name      = */ "elf64-sparc-freebsd",
++		/* .bt_type      = */ ETF_ELF,
++		/* .bt_byteorder = */ ELFDATA2MSB,
++		/* .bt_elfclass  = */ ELFCLASS64,
++		/* .bt_machine   = */ EM_SPARCV9,
++		/* .bt_osabi     = */ ELFOSABI_FREEBSD
++	},
++
++	{
++		/* .bt_name      = */ "elf64-x86-64",
++		/* .bt_type      = */ ETF_ELF,
++		/* .bt_byteorder = */	ELFDATA2LSB,
++		/* .bt_elfclass  = */ ELFCLASS64,
++		/* .bt_machine   = */ EM_X86_64,
++	},
++
++	{
++		/* .bt_name      = */ "elf64-x86-64-freebsd",
++		/* .bt_type      = */ ETF_ELF,
++		/* .bt_byteorder = */ ELFDATA2LSB,
++		/* .bt_elfclass  = */ ELFCLASS64,
++		/* .bt_machine   = */ EM_X86_64,
++		/* .bt_osabi     = */ ELFOSABI_FREEBSD
++	},
++
++	{
++		/* .bt_name = */ "ihex",
++		/* .bt_type = */ ETF_IHEX,
++	},
++
++	{
++		/* .bt_name = */ "srec",
++		/* .bt_type = */ ETF_SREC,
++	},
++
++	{
++		/* .bt_name = */ "symbolsrec",
++		/* .bt_type = */ ETF_SREC,
++	},
++
++	{
++		/* .bt_name = */ NULL,
++		/* .bt_type = */ ETF_NONE,
++	},
++#else
++	{
+ 		.bt_name = "binary",
+ 		.bt_type = ETF_BINARY,
+ 	},
+@@ -378,4 +723,5 @@
+ 		.bt_name = NULL,
+ 		.bt_type = ETF_NONE,
+ 	},
++#endif
+ };
+Index: libelftc/libelftc_dem_gnu3.c
+===================================================================
+--- libelftc/libelftc_dem_gnu3.c	(revision 3248)
++++ libelftc/libelftc_dem_gnu3.c	(working copy)
+@@ -188,6 +188,7 @@
+ 			return (NULL);
+ 		snprintf(rtn, org_len + 19,
+ 		    "global constructors keyed to %s", org + 11);
++                rtn[org_len + 19] ='\0';
+ 		return (rtn);
+ 	}
+ 
+@@ -1702,7 +1703,15 @@
+ 		return (0);
+ 	}
+ 
++#ifdef _MSC_VER
++        /* There is no asprintf on Windows */
++#       define MAX_PRINTF_LD_SIZE 16
++        *str = (char *) malloc(MAX_PRINTF_LD_SIZE);
++	if (snprintf(*str, MAX_PRINTF_LD_SIZE, "%ld", n) < 0) {
++                free(*str);
++#else
+ 	if (asprintf(str, "%ld", n) < 0) {
++#endif
+ 		*str = NULL;
+ 		return (0);
+ 	}
+@@ -3186,7 +3195,11 @@
+ 	if ((rtn = malloc(sizeof(char) * rtn_len)) == NULL)
+ 		return (NULL);
+ 
++#ifdef _MSC_VER
++	if (snprintf(rtn, rtn_len, "%fld", f) < 0) {
++#else
+ 	if (snprintf(rtn, rtn_len, "%fld", f) >= (int)rtn_len) {
++#endif
+ 		free(rtn);
+ 		if (limit++ > FLOAT_SPRINTF_TRY_LIMIT)
+ 			return (NULL);
+@@ -3229,7 +3242,11 @@
+ 	if ((rtn = malloc(sizeof(char) * rtn_len)) == NULL)
+ 		return (NULL);
+ 
++#ifdef _MSC_VER
++	if (snprintf(rtn, rtn_len, "%ff", f) < 0) {
++#else
+ 	if (snprintf(rtn, rtn_len, "%ff", f) >= (int)rtn_len) {
++#endif
+ 		free(rtn);
+ 		if (limit++ > FLOAT_SPRINTF_TRY_LIMIT)
+ 			return (NULL);
+@@ -3285,7 +3302,11 @@
+ 		if ((rtn = malloc(sizeof(char) * rtn_len)) == NULL)
+ 			return (NULL);
+ 
++#ifdef _MSC_VER
++                if (snprintf(rtn, rtn_len, "%Lfd", f) < 0) {
++#else
+ 		if (snprintf(rtn, rtn_len, "%Lfd", f) >= (int)rtn_len) {
++#endif
+ 			free(rtn);
+ 			if (limit++ > FLOAT_SPRINTF_TRY_LIMIT)
+ 				return (NULL);
+@@ -3345,7 +3366,11 @@
+ 		if ((rtn = malloc(sizeof(char) * rtn_len)) == NULL)
+ 			return (NULL);
+ 
++#ifdef _MSC_VER
++                if (snprintf(rtn, rtn_len, "%Lfd", f) < 0) {
++#else
+ 		if (snprintf(rtn, rtn_len, "%Lfd", f) >= (int)rtn_len) {
++#endif
+ 			free(rtn);
+ 			if (limit++ > FLOAT_SPRINTF_TRY_LIMIT)
+ 				return (NULL);
+@@ -3396,7 +3421,11 @@
+ 	if ((rtn = malloc(sizeof(char) * rtn_len)) == NULL)
+ 		return (NULL);
+ 
++#ifdef _MSC_VER
++	if (snprintf(rtn, rtn_len, "%Lfd", f) < 0) {
++#else
+ 	if (snprintf(rtn, rtn_len, "%Lfd", f) >= (int)rtn_len) {
++#endif
+ 		free(rtn);
+ 		if (limit++ > FLOAT_SPRINTF_TRY_LIMIT)
+ 			return (NULL);
+Index: libelftc/libelftc_vstr.c
+===================================================================
+--- libelftc/libelftc_vstr.c	(revision 3248)
++++ libelftc/libelftc_vstr.c	(working copy)
+@@ -234,6 +234,7 @@
+ 		return (false);
+ 
+ 	snprintf(v->container[v->size], len + 1, "%s", str);
++        v->container[v->size][len] ='\0';
+ 
+ 	++v->size;
+ 

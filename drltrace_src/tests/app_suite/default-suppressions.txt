@@ -1,0 +1,191 @@
+# **********************************************************
+# Copyright (c) 2011-2016 Google, Inc.  All rights reserved.
+# **********************************************************
+#
+# Dr. Memory: the memory debugger
+#
+# This library is free software; you can redistribute it and/or
+# modify it under the terms of the GNU Lesser General Public
+# License as published by the Free Software Foundation;
+# version 2.1 of the License, and no later version.
+#
+# This library is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+# Library General Public License for more details.
+#
+# You should have received a copy of the GNU Lesser General Public
+# License along with this library; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+
+# We use these suppressions to silence the known reports, especially false
+# positive reports. This way we can achieve a 'clean' run of tests that have
+# no errors in the code and make sure no new reports appear over time.
+#
+# Each suppression should have a link to the corresponding Dr. Memory issue.
+# Before marking an issue as Fixed, please take time to remove the
+# corresponding suppressions from this file.
+
+########################################################
+# Third-party software introducing extra reports
+
+# Sophos AV software may introduce extra uninits and leaks
+# http://https://github.com/DynamoRIO/drmemory/issues/415
+LEAK
+...
+sophos*.dll!*
+
+# Sophos AV software may introduce extra uninits and leaks
+# http://https://github.com/DynamoRIO/drmemory/issues/415
+UNINITIALIZED READ
+...
+sophos*.dll!*
+
+# http://https://github.com/DynamoRIO/drmemory/issues/275
+LEAK
+*!_getptd_noexit
+*!_getptd
+
+# http://https://github.com/DynamoRIO/drmemory/issues/369
+LEAK
+...
+ntdll.dll!RtlAllocateActivationContextStack
+
+# http://https://github.com/DynamoRIO/drmemory/issues/382
+LEAK
+...
+ntdll.dll!CsrNewThread
+ntdll.dll!RtlUnicodeStringToInteger
+ntdll.dll!KiUserApcDispatcher
+
+# http://https://github.com/DynamoRIO/drmemory/issues/383
+UNADDRESSABLE ACCESS
+...
+msvcrt.dll!memcpy_s
+msvcrt.dll!memcpy_s
+msvcrt.dll!lock
+msvcrt.dll!lock
+
+# http://https://github.com/DynamoRIO/drmemory/issues/383
+INVALID HEAP ARGUMENT
+msvcrt.dll!memcpy_s
+
+# http://https://github.com/DynamoRIO/drmemory/issues/385
+LEAK
+ntdll.dll!RtlInitOutOfProcessMemoryStream
+ntdll.dll!RtlInitializeCriticalSection
+
+##################################################
+# Deliberate bugs in tests
+
+UNINITIALIZED READ
+name=i#837: deliberate race in test
+# i#1082: Can't match against trailing .exe.
+racecheck*!DoubleCheckedLocking::UseMe
+racecheck*!DoubleCheckedLocking::Worker?
+
+WARNING
+name=deliberate calloc failure
+*!MallocTests_CallocOverflow_Test::TestBody*
+
+##################################################
+# i#1140: closed-MessageBox leaks: not analyzed
+
+LEAK
+name=i#1140 closed-MessageBox A
+KERNELBASE.dll!LocalAlloc
+MSCTF.dll!*
+
+LEAK
+name=i#1140 closed-MessageBox B
+ntdll.dll!LdrpSearchResourceSection_U
+ntdll.dll!*
+
+LEAK
+name=i#1140 closed-MessageBox C
+UxTheme.dll!...
+USER32.dll!...
+USER32.dll!*Message
+
+# with -replace_malloc I see this too:
+LEAK
+name=i#1140 closed-MessageBox D
+ntdll.dll!RtlpUpdateTEBLanguage
+ntdll.dll!...
+KERNEL*.dll!*
+
+# on win8:
+# (this is also suppressing i#1250 win8 leaks)
+LEAK
+name=i#1140 closed-MessageBox E
+combase.dll!*
+...
+tiptsf.dll!*
+
+# on win8:
+LEAK
+name=i#1140 closed-MessageBox F
+tiptsf.dll!...
+MSCTF.dll!...
+USER32.dll!*
+
+##################################################
+# i#1127: win8-specific leaks: not analyzed
+
+LEAK
+name=i#1227 win8 A
+combase.dll!...
+ole32.dll!CoInitialize
+
+LEAK
+name=i#1227 win8 B
+ntdll.dll!...
+ntdll.dll!LdrLoadDll
+KERNELBASE.dll!LoadLibraryExW
+
+# Top frame is gdi32!CreateFontIndirectExW w/ syms.
+LEAK
+name=i#1227 win8 C
+GDI32.dll!*
+GDI32.dll!CreateFontIndirectW
+
+# Xref i#753, though there's no setupapi.dll here.
+# Top frame is ntdll!LdrpSearchResourceSection_U w/ syms.
+LEAK
+name=i#1227 win8 D
+ntdll.dll!...
+KERNELBASE.dll!FindResourceExW
+user32.dll!*
+
+# Top frame is uxtheme!gCThemeWnd::Attach w/ syms.
+LEAK
+name=i#1227 win8 E
+uxtheme.dll!...
+user32.dll!*
+
+##################################################
+# i#1250: win8-specific CreateWindowEx leaks: not analyzed
+# (xref some suppressed by i#1140 suppressions above)
+
+LEAK
+name=i#1250 win8 CreateWindowEx
+combase.dll!...
+imm32.dll!...
+user32.dll!CreateWindowExW
+
+##################################################
+# i#1023: RPC binding leaks
+# Seen reliably in PDH.PerfDataLog test.
+LEAK
+name=default i#1023: RPC binding leaks
+RPCRT4.dll!AllocWrapper
+RPCRT4.dll!...
+RPCRT4.dll!*BindingCopy
+
+##################################################
+# i#1875: Concurrency x64 possible leak
+# Seen reliably in Concurrency.Scheduler x64 test.
+# Needs analysis.
+POSSIBLE LEAK
+name=default i#1875: Concurrency x64
+*!Concurrency::details::SchedulerBase::GetSubAllocator

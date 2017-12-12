@@ -1,0 +1,11 @@
+Sending SIGUSR2
+Sending SIGUSR1
+in signal handler
+Got SIGUSR1
+Sending SIGRTMAX
+in signal handler
+Got SIGRTMAX
+Generating SIGSEGV
+in signal handler
+Got SIGSEGV
+250006.902505

@@ -1,0 +1,128 @@
+# **********************************************************
+# Copyright (c) 2015 Google, Inc.  All rights reserved.
+# **********************************************************
+#
+# Dr. Memory: the memory debugger
+#
+# This library is free software; you can redistribute it and/or
+# modify it under the terms of the GNU Lesser General Public
+# License as published by the Free Software Foundation;
+# version 2.1 of the License, and no later version.
+#
+# This library is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+# Library General Public License for more details.
+#
+# You should have received a copy of the GNU Lesser General Public
+# License along with this library; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+#
+%ANYLINE
+6062636465666768
+656768696a6b6c6d
+64666768696a6b6c
+626465666768696a
+6163646566676869
+6365666768696a6b
+6668696a6b6c6d6e
+67696a6b6c6d6e6f
+6769696a6b6c6d6e
+6264646566676869
+6466666768696a6b
+65676768696a6b6c
+686a6a6b6c6d6e6f
+666868696a6b6c6d
+696b6b6c6d6e6f70
+636565666768696a
+6869696b6c6d6e6f
+636464666768696a
+65666668696a6b6c
+666767696a6b6c6d
+696a6a6c6d6e6f70
+696a6b6d6d6e6f70
+6a6b6b6d6e6f7071
+6768696b6b6c6d6e
+6768686a6b6c6d6e
+6465666868696a6b
+6667686a6a6b6c6d
+6465656768696a6b
+6a6b6c6d6d6f7071
+65666768686a6b6c
+6b6c6d6f6f707172
+6a6b6c6e6e6f7071
+68696a6b6b6d6e6f
+68696a6c6c6d6e6f
+6b6c6d6e6f717172
+696a6b6c6c6e6f70
+666768696a6c6c6d
+6c6d6e6f6f717273
+65666769696a6b6c
+6b6c6d6e6e707172
+696a6b6c6d6f6f70
+6c6d6e6f70717173
+6768696a6a6c6d6e
+6a6b6c6d6e707071
+66676869696b6c6d
+6768696a6b6c6c6e
+6d6e6f7071737374
+6d6e6f7071727375
+68696a6b6c6d6e70
+6c6d6e6f70727273
+6a6b6c6d6e6f6f71
+68696a6b6c6e6e6f
+6b6c6d6e6f707072
+6768696a6b6d6d6e
+696a6b6c6d6e6e70
+706f707172737475
+6e6f707172737375
+6b6a6b6c6d6e6f70
+6d6e6f7071727274
+6b6c6d6e6f707173
+6c6d6e6f70717274
+6a6b6c6d6e6f7072
+6f6e717273747576
+6f70717273747577
+6a696c6d6e6f7071
+68696a6b6c6d6d6f
+6e6f707172737476
+6e6d6e6f70717273
+7170717273747576
+6f6e6f7071727374
+6d6c6d6e6f707172
+7271727374757677
+696a6b6c6d6e6f71
+6d6c6f7071727374
+706f727374757677
+6e6d707172737475
+6c6b6e6f70717273
+7170737475767778
+686a6b6c6d6e6f70
+6c6b6c6d6e6f7071
+6a6c6c6d6e6f7071
+6b6c6c6e6f707172
+6b6a6d6e6f707172
+6c6d6e7070717273
+6d6e6f7070727374
+6e6f707172747475
+6f70717273747476
+7071727374757678
+7372737475767778
+7271747576777879
+696b6c6d6e6f7071
+6b6d6d6e6f707172
+6c6d6d6f70717273
+6d6e6f7171727374
+6e6f707171737475
+6f70717273757576
+7071727374757577
+7172737475767779
+7473747576777879
+737275767778797a
+%ENDANYLINE
+~~Dr.M~~ NO ERRORS FOUND:
+~~Dr.M~~       0 unique,     0 total unaddressable access(es)
+~~Dr.M~~       0 unique,     0 total invalid heap argument(s)
+~~Dr.M~~       0 unique,     0 total warning(s)
+~~Dr.M~~       0 unique,     0 total,      0 byte(s) of leak(s)
+~~Dr.M~~       0 unique,     0 total,      0 byte(s) of possible leak(s)

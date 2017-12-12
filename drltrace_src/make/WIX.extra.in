@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi"
+     xmlns:util="http://schemas.microsoft.com/wix/UtilExtension">
+    <Fragment>
+        <DirectoryRef Id="PROGRAM_MENU_FOLDER">
+          <Component Id="CM_SHORTCUT_EXTRA" Guid="*">
+            <RegistryValue Root="HKCU" Key="Software\Google\Dr. Memory" Name="installed_links" Type="integer" Value="1" KeyPath="yes"/>
+            <Shortcut Id="CM_SP_explore"
+                Name="Explore Dr. Memory (drag your app onto drmemory.exe)"
+                Target="[SystemFolder]explorer.exe" Arguments="&quot;[$CM_CP_bin.drmemory.exe]&quot;"/>
+            <Shortcut Id="CM_SP_docs_shortcut"
+                Name="Dr. Memory documentation"
+                Target="[#CM_FP_drmemory.docs.html.index.html]"/>
+            <util:InternetShortcut Id="CM_SP_www_shortcut"
+                Name="Dr. Memory home page"
+                Target="http://drmemory.org/"/>
+            </Component>
+        </DirectoryRef>
+
+        <!-- i#1761: ideally we'd have a dialog where the user picks
+             whether to do this and whether system or user, but for
+             now we always do it for user (the zip file can be used
+             instead of installer if this is undesirable).
+        -->
+        <ComponentGroup Id="CG_ADD_TO_PATH" Directory="INSTALL_ROOT">
+          <Component Id="CM_ADD_TO_PATH" Guid="208034b8-7cc5-4718-9b99-ac50201c3f90"
+              KeyPath="yes">
+            <!-- XXX i#1762: not being removed on uninstall!  Why? -->
+            <Environment Id="ENV_PATH" Name="PATH" Value="[$CM_CP_bin.drmemory.exe]"
+                Permanent="no" Part="last" Action="set" System="no" />
+          </Component>
+        </ComponentGroup>
+    </Fragment>
+</Wix>

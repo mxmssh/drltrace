@@ -1,0 +1,239 @@
+/* **********************************************************
+ * Copyright (c) 2015-2017 Google, Inc.  All rights reserved.
+ * **********************************************************/
+
+/*
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *
+ * * Redistributions of source code must retain the above copyright notice,
+ *   this list of conditions and the following disclaimer.
+ *
+ * * Redistributions in binary form must reproduce the above copyright notice,
+ *   this list of conditions and the following disclaimer in the documentation
+ *   and/or other materials provided with the distribution.
+ *
+ * * Neither the name of Google, Inc. nor the names of its contributors may be
+ *   used to endorse or promote products derived from this software without
+ *   specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL GOOGLE, INC. OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+ * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+ * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH
+ * DAMAGE.
+ */
+
+/**
+***************************************************************************
+***************************************************************************
+\page page_drcachesim Cache Simulator
+
+\p drcachesim is a DynamoRIO client that collects memory access traces
+and feeds them to an online or offline tool for analysis.
+The default analysis tool is a cache simulator which simulates a set of
+specific caching devices, e.g., CPU caches and TLBs.  The trace collector and
+simulator support multiple processes each with multiple threads.
+
+ - \ref sec_drcachesim
+ - \ref sec_drcachesim_run
+ - \ref sec_drcachesim_sim
+ - \ref sec_drcachesim_phys
+ - \ref sec_drcachesim_limit
+ - \ref sec_drcachesim_extend
+ - \ref sec_drcachesim_ops
+ - \ref sec_drcachesim_cmp
+
+\section sec_drcachesim Overview
+
+\p drcachesim consists of two components: a tracer and an analyzer.
+The tracer collects a memory access trace from each thread within each
+application process.
+The analyzer consumes the traces (online or offline) and performs
+customized analysis.
+It is designed to be extensible, allowing users to easily implement a
+simulator for different devices, such as CPU caches, TLBs, page
+caches, etc. (see \ref sec_drcachesim_extend).
+The default analyzer simulates the architectural behavior of caching
+devices for a target application (or multiple applications).
+
+\section sec_drcachesim_run Running the Simulator
+
+To launch \p drcachesim, use the \p -t flag to \p drrun:
+
+\code
+bin64/drrun -t drcachesim -- /path/to/target/app <args> <for> <app>
+\endcode
+
+The target application will be launched under a DynamoRIO tracer
+client that gathers all of its memory references and passes them to
+the simulator via a pipe.
+Any child processes will be followed into and profiled, with their
+memory references passed to the simulator as well.
+
+To simulate TLB devices instead of caches, use the \p -simulator_type
+parameter:
+
+\code
+bin64/drrun -t drcachesim -simulator_type TLB -- /path/to/target/app <args> <for> <app>
+\endcode
+
+Several other trace analysis tools are under development.
+
+To dump the trace for future offline analysis:
+\code
+bin64/drrun -t drcachesim -offline -- /path/to/target/app <args> <for> <app>
+\endcode
+
+The collected traces will be dumped into a newly created directory,
+which can be passed to drcachesim for offline cache simulation with the \p
+-indir option:
+\code
+bin64/drrun -t drcachesim -indir drmemtrace.app.pid.xxxx.dir/
+\endcode
+
+The direct results of the \p -offline run are raw, compacted files, stored
+in a \p raw subdirectory of the \p drmemtrace.app.pid.xxxx.dir directory.
+The \p -indir option both converts the data to a canonical trace form and
+passes the resulting data to the cache simulator.  The canonical trace data
+is stored by \p -indir in a file named \p drmemtrace.trace inside the \p
+drmemtrace.app.pid.xxxx.dir/ directory.  Future runs can point directly at
+this file using the \p -infile option:
+\code
+bin64/drrun -t drcachesim -infile drmemtrace.app.pid.xxxx.dir/drmemtrace.trace
+\endcode
+
+The \p -infile option supports reading a gzipped trace file, allowing
+compression of the \p drmemtrace.trace file to save space:
+\code
+gzip drmemtrace.app.pid.xxxx.dir/drmemtrace.trace
+bin64/drrun -t drcachesim -infile drmemtrace.app.pid.xxxx.dir/drmemtrace.trace.gz
+\endcode
+
+\section sec_drcachesim_sim Simulator Details
+
+Generally, the simulator is able to be extended to model a variety of
+caching devices.  Currently, CPU caches and TLBs are implemented.  The type of
+device to simulate can be specified by the parameter
+"-simulator_type" (see \ref sec_drcachesim_ops).
+
+The CPU cache simulator models a configurable number of cores,
+each with an L1 data cache and an L1 instruction cache.
+Currently there is a single shared L2 unified cache, but we would like to
+extend support to arbitrary cache hierarchies (see \ref sec_drcachesim_limit).
+The cache line size and each cache's total size and associativity are
+user-specified (see \ref sec_drcachesim_ops).
+
+The TLB simulator models a configurable number of cores, each with an
+L1 instruction TLB, an L1 data TLB, and an L2 unified TLB.  Each TLB's
+entry number and associativity, and the virtual/physical page size,
+are user-specified (see \ref sec_drcachesim_ops).
+
+Neither simulator has a simple way to know which core any particular thread
+executed on at a given point in time.  Instead it uses a simple static
+scheduling of threads to cores, using a round-robin assignment with load
+balancing to fill in gaps with new threads after threads exit.
+
+The memory access traces contain some optimizations that combine references
+for one basic block together.  This may result in not considering some
+thread interleavings that could occur natively.  There are no other
+disruptions to thread ordering, however, and the application runs with all
+of threads concurrently just like it would natively (although slower).
+
+Once every process has exited, the simulator prints cache miss statistics
+for each cache to stderr.  The simulator is designed to be extensible,
+allowing for different cache studies to be carried out: see \ref
+sec_drcachesim_extend.
+
+For L2 caching devices, the L1 caching devices are considered its _children_.
+Two separate miss rates are computed, one (the "Local miss rate") considering
+just requests that reach L2 while the other (the "Total miss rate")
+includes the child hits.
+
+For memory requests that cross blocks, each block touched is
+considered separately, resulting in separate hit and miss statistics.  This
+can be changed by implementing a custom statistics gatherer (see \ref
+sec_drcachesim_extend).
+
+
+\section sec_drcachesim_phys Physical Addresses
+
+The memory access tracing client gathers virtual addresses.  On Linux, if
+the kernel allows user-mode applications access to the \p
+/proc/self/pagemap file, physical addresses may be used instead.  This can
+be requested via the \p -use_physical runtime option (see \ref
+sec_drcachesim_ops).  This works on current kernels but is expected to stop
+working from user mode on future kernels due to recent security changes
+(see
+http://git.kernel.org/cgit/linux/kernel/git/torvalds/linux.git/commit/?id=ab676b7d6fbf4b294bf198fb27ade5b0e865c7ce).
+
+
+\section sec_drcachesim_limit Current Limitations
+
+The \p drcachesim tool is a work in progress.  We welcome contributions in
+these areas of missing functionality:
+
+- Cache coherence (https://github.com/DynamoRIO/dynamorio/issues/1726)
+- Multi-process online application simulation on Windows (https://github.com/DynamoRIO/dynamorio/issues/1727)
+- Arbitrary cache hierarchy support via an input config file
+  (https://github.com/DynamoRIO/dynamorio/issues/1715)
+
+
+\section sec_drcachesim_extend Extending the Simulator
+
+The \p drcachesim tool was designed to be extensible, allowing users to
+easily model different caching devices, implement different models, and
+gather custom statistics.
+
+To model different caching devices, subclass the \p simulator_t,
+caching_device_t, caching_device_block_t, caching_device_stats_t classes.
+
+To implement a different cache model, subclass the \p cache_t class and
+override the \p request(), \p access_update(), and/or \p
+replace_which_way() method(s).
+
+Statistics gathering is separated out into the \p caching_device_stats_t
+class.  To implement custom statistics, subclass \p caching_device_stats_t
+and override the \p access(), \p child_access(), \p flush(), and/or
+\p print_stats() methods.
+
+
+\section sec_drcachesim_ops Simulator Parameters
+
+\p drcachesim's behavior can be controlled through options passed after the
+\p -c \p drcachesim but prior to the "--" delimiter on the command line:
+
+\code
+bin64/drrun -t drcachesim <options> <to> <drcachesim> -- /path/to/target/app <args> <for> <app>
+\endcode
+
+Boolean options can be disabled using a "-no_" prefix.
+
+The parameters available are described below:
+
+REPLACEME_WITH_OPTION_LIST
+
+
+\section sec_drcachesim_cmp Comparison to Other Simulators
+
+\p drcachesim is one of the few simulators to support multiple processes.
+This feature requires an out-of-process simulator and inter-process
+communication.  A single-process design would incur less overhead.  Thus,
+we expect \p drcachesim to pay for its multi-process support with
+potentially unfavorable performance versus single-process simulators.
+
+When comparing cache hits, misses, and miss rates across simulators, the
+details can vary substantially.  For example, some other simulators (such
+as \p cachegrind) do not split memory references that cross cache lines
+into multiple hits or misses.  Additionally, instructions that reference
+multiple memory words (such as \p ldm on ARM) are considered to be single
+accesses by \p drcachesim, while other simulators (such as \p cachegrind)
+may split the accesses into separate pieces.
+
+*/
