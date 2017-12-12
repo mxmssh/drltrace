@@ -1,25 +1,25 @@
 # Drltrace
-Drltrace is a dynamic API calls tracer for Windows and Linux applications. Drltrace is built on top of [DynamoRIO](http://www.dynamorio.org/) dynamic binary instrumentation framework. The release build can be downloaded [here](https://github.com/mxmssh/drltrace/releases).
+Drltrace is a dynamic API calls tracer for Windows and Linux applications designed primarly for malware analysis. Drltrace is built on top of [DynamoRIO](http://www.dynamorio.org/) dynamic binary instrumentation framework. The release build can be downloaded [here](https://github.com/mxmssh/drltrace/releases).
 
 # License
 
 BSD.
 
 # Motivation
-<Some intro>
-Sophisticated software packers like Themida and Armadillo and of course dozens of unnamed packers written by malware authors plus code & data encryption significantly facilitate (in some cases making it completely impossible) static reverse engineering of such samples thereby delaying detection. In such case, API calls tracing can significantly reduce amount of time required to understand an actual malicious intent and ?????.  <More motivation for API calls tracing>.
+Malware analysis is not an easy task. Sophisticated software packers like Themida and Armadillo and of course dozens of unnamed packers written by malware authors plus code & data encryption significantly facilitate (in some cases making it completely impossible) static reverse engineering of such samples making life of malware analysts complicated. In such case, API calls tracing can significantly reduce amount of time required to understand an actual malicious intent and reveal a lot of technical details about protected malicious code.
 
-While traditional technique of API-hooking technique was successfully implemented in several solutions[link], the approach is well studied by malware authors and can be easily detected and/or bypassed as shown in these works [6] [7]. Moreover, these tools are distributed as standalone heavy-weight GUI applications (as a proprietary products) which are not often easy to integrate within existent malware analysis workflow.
+While traditional technique of API-hooking was successfully implemented in several solutions, the approach is well studied by malware authors and can be easily detected and/or bypassed. Moreover, these tools are distributed as standalone heavy-weight GUI applications (as proprietary products) which are not often easy to integrate within existent malware analysis workflow.
 
 If we look on Linux world, there is a wonderful tool called [ltrace](https://linux.die.net/man/1/ltrace). Using a single bash command, we can easily get the full trace of API calls of a certain executable. 
 
 **Why don’t we have such tool (like ltrace in Linux) for Windows which is also transparent against anti-research tricks used by modern malware?**
 
-It turns that there is a technique that can help us to have such tool for Windows and trace API calls transparently towards executed program. This technique is called dynamic binary instrumentation aka DBI. DBI is a technique of analyzing the behavior of a binary application at runtime through the injection of instrumentation code. 
+It turns that there is a technique that can help us to have such tool for Windows and trace API calls transparently towards executed program. This technique is called dynamic binary instrumentation aka DBI. DBI is a technique of analyzing the behavior of a binary application at runtime through the injection of instrumentation code.
+
+However, application of DBI for malware analysis is undeservedly limited by unpacking automatization and several proofs of concepts for instructions, basic blocks and function calls tracing. As far as we know, drltrace is a first tool for API calls tracing based on DBI which can be used in practice for malware analysis. We provided several malware analysis examples in our [wiki](https://github.com/mxmssh/drltrace/wiki/Malware-Analysis-Examples) where we described how drltrace allowed to revel in several minutes a lot of internal technical details about sophisticated malicious samples without even starting IDA or debugger.
 
 # Why Drltrace Rock ?
 - Fast enough to perform analysis of malicious samples without being detected by time-based anti-research techniques.
-![alt text](github/DrLtrace-Performance.png)
 - Supports both x86 and x64 (ARM in future).
 - Supports both Windows and Linux (macOS in future).
 - Supports self-modifying code.
@@ -27,7 +27,7 @@ It turns that there is a technique that can help us to have such tool for Window
 - Not-detectable by standard anti-research approaches (anti-hooking, anti-debugging and anti-emulation).
 - User can easily add a new function prototype to tell drltrace how to print more details about previously unknown API calls (even about non-system DLLs). External configuration file is used.
 - Easy-to-use and modify for your own purposes (no additional package requirements, no heavy-weight GUI interface).
-- Open-source (BSD-license), you can freely build & use your own advanced solution on top of drltrace.
+- Open-source (BSD-license), code is clear and well-documented. You can freely build & use your own advanced solution on top of drltrace.
 
 # Usage
 The usage of drltrace is very simple. A user needs to specify a log directory and a name of a target process in the following way:
@@ -65,7 +65,6 @@ arg [arg #]: [value] (type=[Windows type name], size=[size of arg])
 and return to module id:[module unique id], offset:[offset in memory]
 ```
 The module unique identifiers table is printed at the end of the log file:
-
 ```
 Module Table: version 3, count 70
 Columns: id, containing_id, start, end, entry, checksum, timestamp, path
@@ -110,10 +109,23 @@ Each function argument should be separated by ```|```. The first argument is ret
 
 # Malware Analysis Examples
 
-You can find examples of how to use Drltrace for analysis of complex malware at our [Wiki page](https://github.com/mxmssh/drltrace/wiki/Malware-Analysis-Examples). *At this page we described how drltrace allowed us to revel in several minutes a lot of internal technical details without even starting IDA or debugger about several sophisticated malicious samples.*
+You can find examples of how to use Drltrace for analysis of complex malware at our [Wiki page](https://github.com/mxmssh/drltrace/wiki/Malware-Analysis-Examples).
+
+# Log Visualization
+
+To make the work with log files easier, we have implemented a script called ```api_calls_viz.py``` which can be used to generate RGB images where each pixel represent unique API call. For example, the picture below represents log file of ???? malware.
+
+PICTURE HERE
+
+You can easily find that the first part of the image (which has certain structure) is unpacking process.
+
+The script can also generate an HTML representation of generated RGB image where each element can be selected to show a name of API call.
+
+PICTURE HERE
+
+See the ```api_calls_viz``` [directory](https://github.com/mxmssh/drltrace/tree/master/api_calls_viz) for more details.
 
 # How to Build
-
 You can find a detailed manual at this [Wiki page](https://github.com/mxmssh/drltrace/wiki/How-To-Build).
 
 # OS Support
@@ -127,19 +139,23 @@ C and C++ standard libraries (and logs handling scripts written in Python).
 
 # Technical Details
 
-We decided to implement our API calls tracer on top of dynamic binary instrumentation framework DynamoRIO[link]. Drltrace asks DynamoRIO to perform instrumentation of LoadLibrary call to be able to handle new libraries being loaded by the target process. When the process tries to load a new library, DynamoRIO redirects control flow to ```drltracelib.dll```. In turn, drltrace enumerates exported functions in the newly loaded DLL and registers a special callback for each of them. Thus, if some exported function would be called by malware, drltrace’s callback will be executed before this function and the tool will be able to log all required information such as a function name and arguments. Another callback might be registered after the function to save results of execution.
+We decided to implement our API calls tracer on top of dynamic binary instrumentation framework [DynamoRIO](http://www.dynamorio.org/). Drltrace asks DynamoRIO to perform instrumentation of LoadLibrary call to be able to handle new libraries being loaded by the target process. When the process tries to load a new library, DynamoRIO redirects control flow to ```drltracelib.dll```. In turn, drltrace enumerates exported functions in the newly loaded DLL and registers a special callback for each of them. Thus, if some exported function would be called by malware, drltrace’s callback will be executed before this function and the tool will be able to log all required information such as a function name and arguments. Another callback might be registered after the function to save results of execution.
 
-Why not Intel PIN ? We decided to use DynamoRIO motivated by the following reasons:
+Why not Intel Pin ? We decided to use DynamoRIO motivated by the following reasons:
 
 1.	The source code of DynamoRIO is available on github.com and distributed under BSD license while Intel Pin is a proprietary software.
 2.	One of the basic requirements for DynamoRIO at the time of development was transparency towards the instrumented executable.
 3.	DynamoRIO uses different technology of instrumentation based on code transformation while Intel PIN uses special trampolines which is not transparent towards analyzed executable and might be detected by malware.
 
 # Future Work
-1. While drltrace is not detectable by standard anti-research tricks, DBI-engine itself can be detected as shown in these works [14] [15]. Making DynamoRIO resistant against these tricks is important path for future work.
+1. While drltrace is not detectable by standard anti-research tricks, DBI-engine itself can be detected as shown in these works [1](https://www.youtube.com/watch?v=VGmvx2B5qdo), [2](https://recon.cx/2012/schedule/events/216.en.html). Making DynamoRIO resistant against these tricks is important path for future work.
 2. Currently, drltrace prints a raw log and provides several scripts to print important strings and library calls. In future, we plan to add heuristics (probably by applying YARA rules) to be able to select indicative behavior from malware automatically.
 2. Currently, DynamoRIO has beta support of ARM architecture, testing and porting drltrace on ARM is required.
-3. Drltrace doesn’t support situation when malware injects code in a remote process. In such cases, it is possible to tell DynamoRIO inject drltrace in all newly created processes (```-syswide_on option``` of ```drrun.exe```). However, in future, it is necessary to implement a special support in drltrace for such situations.
+3. Drltrace doesn’t support situation when malware injects code in a remote process. In such cases, it is possible to tell DynamoRIO inject drltrace in all newly created processes (```-syswide_on``` option of ```drrun.exe```). However, in future, it is necessary to implement a special support in drltrace for such situations.
 
-# Authors
-TODO
+Our issue tracker contains more details about future of drltrace.
+
+# Acknowledgments
+Maksim Shudrak https://github.com/mxmssh
+
+Derek Bruening https://github.com/derekbruening
