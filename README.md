@@ -111,7 +111,7 @@ Each function argument should be separated by ```|```. The first argument is ret
 
 # Malware Analysis Examples
 
-You can find examples of how to use Drltrace for analysis of complex malware at our [Wiki page](https://github.com/mxmssh/drltrace/wiki/Malware-Analysis-Examples).
+You can find examples of how to use drltrace for analysis of complex malware at our [Wiki page](https://github.com/mxmssh/drltrace/wiki/Malware-Analysis-Examples).
 
 # Log Visualization
 
@@ -119,7 +119,7 @@ To make the work with log files easier, we have implemented a script called ```a
 
 ![API calls picture](pictures/api_calls_vis.png)
 
-The large green areas on the picture represent API calls (```wcscmp/wcsicmp```) which are used to select files with interesting extensions (e.g. docx, xls, py) to encrypt them. The purple areas represents API calls (```FindFirstFile/FindNextFile/CryptEncrypt```) which are used to enumerate and encrypt files and folders on the disk.
+The large green areas on the picture represent API calls (```wcscmp/wcsicmp```) which are used to select files with interesting extensions (e.g. docx, xls, py) to encrypt them. The purple areas represent API calls (```FindFirstFile/FindNextFile/CryptEncrypt```) which are used to enumerate and encrypt files and folders on the disk.
 
 The script can also generate an HTML representation of generated RGB image where each element can be selected to show a name of API call. 
 
@@ -139,7 +139,7 @@ Windows, Linux (macOS in future).
 x86, x64 (ARM on the list).
 
 # Languages
-C and C++ standard libraries (and logs handling scripts written in Python).
+C and C++ standard library (and logs handling scripts written in Python).
 
 # Technical Details
 
