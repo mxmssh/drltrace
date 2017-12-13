@@ -4,6 +4,7 @@ Drltrace is a dynamic API calls tracer for Windows and Linux applications design
 # License
 
 BSD.
+TODO
 
 # Motivation
 Malware analysis is not an easy task. Sophisticated software packers like Themida and Armadillo and of course dozens of unnamed packers written by malware authors plus code & data encryption significantly facilitate (in some cases making it completely impossible) static reverse engineering of such samples making life of malware analysts complicated. In such case, API calls tracing can significantly reduce amount of time required to understand an actual malicious intent and reveal a lot of technical details about protected malicious code.
@@ -27,7 +28,7 @@ However, application of DBI for malware analysis is undeservedly limited by unpa
 - Not-detectable by standard anti-research approaches (anti-hooking, anti-debugging and anti-emulation).
 - User can easily add a new function prototype to tell drltrace how to print more details about previously unknown API calls (even about non-system DLLs). External configuration file is used.
 - Easy-to-use and modify for your own purposes (no additional package requirements, no heavy-weight GUI interface).
-- Open-source (BSD-license), code is clear and well-documented. You can freely build & use your own advanced solution on top of drltrace.
+- Open-source, code is clear and well-documented. You can freely build & use your own advanced solution on top of drltrace.
 
 # Usage
 The usage of drltrace is very simple. A user needs to specify a log directory and a name of a target process in the following way:
@@ -113,11 +114,11 @@ You can find examples of how to use Drltrace for analysis of complex malware at 
 
 # Log Visualization
 
-To make the work with log files easier, we have implemented a script called ```api_calls_viz.py``` which can be used to generate RGB images where each pixel represent unique API call. For example, the picture below represents log file of WannaCry malware.
+To make the work with log files easier, we have implemented a script called ```api_calls_viz.py``` which can be used to generate RGB images where each pixel color represents unique API call. For example, the picture below represents log file of WannaCry malware.
 
 ![API calls picture](pictures/api_calls_vis.png)
 
-The large green areas on the picture represent API calls (```wcscmp/wcsicmp```) which are used to select files with interesting extensions (e.g. docx, xls, py) to encrypt them. The purple areas represents API calls (```FindFirstFile/FindNextFile```) which are used to enumerate files and folders on the disk.
+The large green areas on the picture represent API calls (```wcscmp/wcsicmp```) which are used to select files with interesting extensions (e.g. docx, xls, py) to encrypt them. The purple areas represents API calls (```FindFirstFile/FindNextFile/CryptEncrypt```) which are used to enumerate and encrypt files and folders on the disk.
 
 The script can also generate an HTML representation of generated RGB image where each element can be selected to show a name of API call. 
 
