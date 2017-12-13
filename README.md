@@ -1,5 +1,5 @@
 # Drltrace
-Drltrace is a dynamic API calls tracer for Windows and Linux applications designed primarly for malware analysis. Drltrace is built on top of [DynamoRIO](http://www.dynamorio.org/) dynamic binary instrumentation framework. The release build can be downloaded [here](https://github.com/mxmssh/drltrace/releases).
+Drltrace is a dynamic API calls tracer for Windows and Linux applications designed primarily for malware analysis. Drltrace is built on top of [DynamoRIO](http://www.dynamorio.org/) dynamic binary instrumentation framework. The release build can be downloaded [here](https://github.com/mxmssh/drltrace/releases).
 
 # License
 
