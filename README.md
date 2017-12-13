@@ -3,7 +3,7 @@ Drltrace is a dynamic API calls tracer for Windows and Linux applications design
 
 # License
 
-drltrace and DynamoRIO are distrubuted under BSD.
+Drltrace and DynamoRIO are distrubuted under BSD.
 
 Some additional modules required for drltrace are distrubuted under LGPL. See source files for more details.
 
