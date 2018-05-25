@@ -1,0 +1,3 @@
+[submodule "drltrace_src/dynamorio"]
+	path = drltrace_src/dynamorio
+	url = git://github.com/DynamoRIO/dynamorio.git
