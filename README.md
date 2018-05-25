@@ -6,7 +6,7 @@ The usage of drltrace is very simple. A user needs to specify a log directory an
 ```
 drltrace -logdir . -- calc.exe
 ```
-That’s all, the framework will inject required DLLs in the target process, starts instrumentation and in parallel will log information about all library calls which are executed in the target process:
+That’s all, the tool will inject required DLLs in the target process, starts instrumentation and in parallel will log information about all library calls which are executed in the target process:
 
 ```
 ~~43600~~ msvcrt.dll!__wgetmainargs
