@@ -1,36 +1,6 @@
 # Drltrace
 Drltrace is a dynamic API calls tracer for Windows and Linux applications designed primarily for malware analysis. Drltrace is built on top of [DynamoRIO](http://www.dynamorio.org/) dynamic binary instrumentation framework. The release build can be downloaded [here](https://github.com/mxmssh/drltrace/releases).
 
-# License
-
-Drltrace and DynamoRIO are distrubuted under BSD.
-
-Some additional modules required for drltrace are distrubuted under LGPL. See source files for more details.
-
-# Motivation
-Malware analysis is not an easy task. Sophisticated software packers like Themida and Armadillo and of course dozens of unnamed packers written by malware authors plus code & data encryption significantly facilitate (in some cases making it completely impossible) static reverse engineering of such samples making life of malware analysts complicated. In such case, API calls tracing can significantly reduce amount of time required to understand an actual malicious intent and reveal a lot of technical details about protected malicious code.
-
-While traditional technique of API-hooking was successfully implemented in several solutions, the approach is well studied by malware authors and can be easily detected and/or bypassed. Moreover, these tools are distributed as standalone heavy-weight GUI applications (as proprietary products) which are not often easy to integrate within existent malware analysis workflow.
-
-If we look on Linux world, there is a wonderful tool called [ltrace](https://linux.die.net/man/1/ltrace). Using a single bash command, we can easily get the full trace of API calls of a certain executable. 
-
-**Why don’t we have such tool (like ltrace in Linux) for Windows which is also transparent against anti-research tricks used by modern malware?**
-
-It turns that there is a technique that can help us to have such tool for Windows and trace API calls transparently towards executed program. This technique is called dynamic binary instrumentation aka DBI. DBI is a technique of analyzing the behavior of a binary application at runtime through the injection of instrumentation code.
-
-However, application of DBI for malware analysis is undeservedly limited by unpacking automatization and several proofs of concepts for instructions, basic blocks and function calls tracing. As far as we know, drltrace is a first tool for API calls tracing based on DBI which can be used in practice for malware analysis. We provided several malware analysis examples in our [wiki](https://github.com/mxmssh/drltrace/wiki/Malware-Analysis-Examples) where we described how drltrace allowed to revel in several minutes a lot of internal technical details about sophisticated malicious samples without even starting IDA or debugger.
-
-# Why Drltrace Rock ?
-- Fast enough to perform analysis of malicious samples without being detected by time-based anti-research techniques.
-- Supports both x86 and x64 (ARM in future).
-- Supports both Windows and Linux (macOS in future).
-- Supports self-modifying code.
-- Supports all types of library linkage (static and dynamic).
-- Not-detectable by standard anti-research approaches (anti-hooking, anti-debugging and anti-emulation).
-- User can easily add a new function prototype to tell drltrace how to print more details about previously unknown API calls (even about non-system DLLs). External configuration file is used.
-- Easy-to-use and modify for your own purposes (no additional package requirements, no heavy-weight GUI interface).
-- Open-source, code is clear and well-documented. You can freely build & use your own advanced solution on top of drltrace.
-
 # Usage
 The usage of drltrace is very simple. A user needs to specify a log directory and a name of a target process in the following way:
 ```
@@ -84,6 +54,36 @@ Columns: id, containing_id, start, end, entry, checksum, timestamp, path
 ```
 
 Drltrace can easily filter out interlibrary calls and print only API calls performed from the main module (or from a heap) of a target application by specifying ```-only_from_app``` option which is very useful in case of applications that generate huge logs. Drltrace also has several useful external scripts to filter API calls for certain library, print only potentially interesting API calls and strings.
+
+# License
+
+Drltrace and DynamoRIO are distrubuted under BSD.
+
+Some additional modules required for drltrace are distrubuted under LGPL. See source files for more details.
+
+# Motivation
+Malware analysis is not an easy task. Sophisticated software packers like Themida and Armadillo and of course dozens of unnamed packers written by malware authors plus code & data encryption significantly facilitate (in some cases making it completely impossible) static reverse engineering of such samples making life of malware analysts complicated. In such case, API calls tracing can significantly reduce amount of time required to understand an actual malicious intent and reveal a lot of technical details about protected malicious code.
+
+While traditional technique of API-hooking was successfully implemented in several solutions, the approach is well studied by malware authors and can be easily detected and/or bypassed. Moreover, these tools are distributed as standalone heavy-weight GUI applications (as proprietary products) which are not often easy to integrate within existent malware analysis workflow.
+
+If we look on Linux world, there is a wonderful tool called [ltrace](https://linux.die.net/man/1/ltrace). Using a single bash command, we can easily get the full trace of API calls of a certain executable. 
+
+**Why don’t we have such tool (like ltrace in Linux) for Windows which is also transparent against anti-research tricks used by modern malware?**
+
+It turns that there is a technique that can help us to have such tool for Windows and trace API calls transparently towards executed program. This technique is called dynamic binary instrumentation aka DBI. DBI is a technique of analyzing the behavior of a binary application at runtime through the injection of instrumentation code.
+
+However, application of DBI for malware analysis is undeservedly limited by unpacking automatization and several proofs of concepts for instructions, basic blocks and function calls tracing. As far as we know, drltrace is a first tool for API calls tracing based on DBI which can be used in practice for malware analysis. We provided several malware analysis examples in our [wiki](https://github.com/mxmssh/drltrace/wiki/Malware-Analysis-Examples) where we described how drltrace allowed to revel in several minutes a lot of internal technical details about sophisticated malicious samples without even starting IDA or debugger.
+
+# Why Drltrace Rock ?
+- Fast enough to perform analysis of malicious samples without being detected by time-based anti-research techniques.
+- Supports both x86 and x64 (ARM in future).
+- Supports both Windows and Linux (macOS in future).
+- Supports self-modifying code.
+- Supports all types of library linkage (static and dynamic).
+- Not-detectable by standard anti-research approaches (anti-hooking, anti-debugging and anti-emulation).
+- User can easily add a new function prototype to tell drltrace how to print more details about previously unknown API calls (even about non-system DLLs). External configuration file is used.
+- Easy-to-use and modify for your own purposes (no additional package requirements, no heavy-weight GUI interface).
+- Open-source, code is clear and well-documented. You can freely build & use your own advanced solution on top of drltrace.
 
 # Command line options
 ```
