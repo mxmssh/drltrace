@@ -297,6 +297,12 @@ else()
   set(BIN_ARCH "bin32")
 endif ()
 
+if ("${CMAKE_BUILD_TYPE}" MATCHES "Debug")
+    set(build_type "debug")
+else()
+    set(build_type "release")
+endif()
+
 if (WIN32)
   if (USER_SPECIFIED_DynamoRIO_DIR)
     # already built so we can copy at config time
@@ -304,7 +310,7 @@ if (WIN32)
       "${output_dir}/drconfiglib.dll" COPYONLY)
     configure_file("${DynamoRIO_DIR}/../${LIB_ARCH}/drinjectlib.dll"
       "${output_dir}/drinjectlib.dll" COPYONLY)
-    configure_file("${DynamoRIO_DIR}/../${LIB_ARCH}/${CMAKE_BUILD_TYPE}/dynamorio.dll"
+    configure_file("${DynamoRIO_DIR}/../${LIB_ARCH}/${build_type}/dynamorio.dll"
         "${output_dir}/dynamorio.dll" COPYONLY)
   else (USER_SPECIFIED_DynamoRIO_DIR)
     # XXX: I can't get "TARGET drconfiglib POST_BUILD" to work, maybe b/c
@@ -321,12 +327,11 @@ if (WIN32)
       COMMAND ${CMAKE_COMMAND}
       ARGS -E copy "${DynamoRIO_DIR}/../${LIB_ARCH}/drinjectlib.dll"
       "${drinjectlib_copy}" VERBATIM)
-
     set(drdll_copy "${output_dir}/dynamorio.dll")
     add_custom_target(drdll_copy_tgt ALL DEPENDS "${drdll_copy}")
     add_custom_command(OUTPUT "${drdll_copy}" DEPENDS dynamorio
         COMMAND ${CMAKE_COMMAND}
-        ARGS -E copy "${DynamoRIO_DIR}/../${LIB_ARCH}/${CMAKE_BUILD_TYPE}/dynamorio.dll"
+        ARGS -E copy "${DynamoRIO_DIR}/../${LIB_ARCH}/${build_type}/dynamorio.dll"
         "${drdll_copy}" VERBATIM)
   endif (USER_SPECIFIED_DynamoRIO_DIR)
 endif (WIN32)
