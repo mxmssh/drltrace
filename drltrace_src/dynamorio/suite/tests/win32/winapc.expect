@@ -1,6 +1,0 @@
-Before _beginthreadex
-QueueUserAPC returned 1
-SleepEx returned 192
-Apc arg = 37
-Result = 100
-After _beginthreadex

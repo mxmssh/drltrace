@@ -1,5 +1,0 @@
-preunload main()
-using user32: 0
-drpreinject.dll not found
-loading in preinject library
-drpreinject.dll not found

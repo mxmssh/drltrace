@@ -1,627 +1,35 @@
 # **********************************************************
-# Copyright (c) 2010-2017 Google, Inc.  All rights reserved.
-# Copyright (c) 2009-2010 VMware, Inc.  All rights reserved.
+# Copyright (c) 2010-2017 Google, Inc.    All rights reserved.
+# Copyright (c) 2009-2010 VMware, Inc.    All rights reserved.
 # **********************************************************
 
-# Dr. Memory: the memory debugger
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
 #
-# This library is free software; you can redistribute it and/or
-# modify it under the terms of the GNU Lesser General Public
-# License as published by the Free Software Foundation;
-# version 2.1 of the License, and no later version.
+# * Redistributions of source code must retain the above copyright notice,
+#   this list of conditions and the following disclaimer.
 #
-# This library is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
-# Library General Public License for more details.
+# * Redistributions in binary form must reproduce the above copyright notice,
+#   this list of conditions and the following disclaimer in the documentation
+#   and/or other materials provided with the distribution.
 #
-# You should have received a copy of the GNU Lesser General Public
-# License along with this library; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+# * Neither the name of VMware, Inc. nor the names of its contributors may be
+#   used to endorse or promote products derived from this software without
+#   specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+# ARE DISCLAIMED. IN NO EVENT SHALL VMWARE, INC. OR CONTRIBUTORS BE LIABLE
+# FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+# DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+# SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+# CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+# LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+# OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH
+# DAMAGE.
 
-# We need 2.8.10.1 for crbug.com/159092
-# (For multi-export-set support for DRMF, we also need >= 2.8.10.)
-# (For Visual Studio generators, we also need >= 2.8.2 for output dir name control.)
-# (For Linux, we also need 2.6.4+ for cmake bug #8639 (asm support broken).)
-cmake_minimum_required(VERSION 2.8.10.1)
-
-include(make/policies.cmake NO_POLICY_SCOPE)
-
-# like DR, we collapse VS generator into one config since
-# we don't have enough control over output dirs
-# in build rules (until cmake 2.8.4).
-# this must be prior to the project() command.
-if ("${CMAKE_GENERATOR}" MATCHES "Visual Studio")
-  if ("${CMAKE_BUILD_TYPE}" MATCHES "Debug")
-    set(CMAKE_CONFIGURATION_TYPES "Debug" CACHE STRING "" FORCE)
-  else ()
-    set(CMAKE_CONFIGURATION_TYPES "RelWithDebInfo" CACHE STRING "" FORCE)
-  endif ()
-  # we want to use the _LOCATION_<config> property
-  string(TOUPPER "${CMAKE_CONFIGURATION_TYPES}" upper)
-  set(location_suffix "_${upper}")
-else ("${CMAKE_GENERATOR}" MATCHES "Visual Studio")
-  set(location_suffix "")
-endif ("${CMAKE_GENERATOR}" MATCHES "Visual Studio")
-
-# I want to override the default CMAKE_INSTALL_PREFIX, but allow it to
-# be set (as the same var name, so CPack and other standard tools
-# work) externally.  The best solution is to check whether defined BEFORE
-# the project() command.
-# If we didn't use standard tools we could set CMAKE_INSTALL_PREFIX
-# to be CACHE INTERNAL FORCE to INSTALL_PREFIX.
-if (NOT DEFINED CMAKE_INSTALL_PREFIX)
-  set(install_override ON)
-else (NOT DEFINED CMAKE_INSTALL_PREFIX)
-  set(install_override OFF)
-endif (NOT DEFINED CMAKE_INSTALL_PREFIX)
-
-project(DrMemory NONE)
-if (DEFINED GENERATE_PDBS AND NOT GENERATE_PDBS)
-  # support building over cygwin ssh where we cannot build pdbs.
-  # using the same solution as DynamoRIO i#310.
-  # To prevent cmake's try-compile for its working compiler test and
-  # its ABI determination test we request a Release build config
-  # via a custom Plaform/Windows-cl.cmake in our make/ dir.
-  set(CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/make")
-endif ()
-enable_language(C)
-enable_language(CXX)
-
-include(CheckCCompilerFlag)
-
-if (UNIX)
-  set(LINUX 1)
-endif (UNIX)
-
-set(X86 1)
-
-if (UNIX)
-  set(DEFINES ${DEFINES} -DUNIX)
-endif (UNIX)
-
-option(VMKERNEL "target vmkernel")
-if (VMKERNEL)
-  # if we get enough of these, should use a configure.h, but would need to
-  # pull the ops out like DR core does to pass to options_perl below
-  set(DEFINES ${DEFINES} -DVMX86_SERVER)
-endif (VMKERNEL)
-
-option(USE_MD5 "use md5 instead of crc32 for callstack hashes for Dr. Heapstat")
-if (USE_MD5)
-  set(DEFINES ${DEFINES} -DUSE_MD5)
-endif (USE_MD5)
-option(CHECK_WITH_MD5 "use crc32 for callstack hashes but check for collisions with md5")
-if (CHECK_WITH_MD5)
-  set(DEFINES ${DEFINES} -DCHECK_WITH_MD5)
-endif (CHECK_WITH_MD5)
-option(STATIC_DRSYMS "use static drsyms library" ON)
-if (UNIX AND NOT STATIC_DRSYMS)
-  # we could support dynamic but we'd have to copy libdrsym.so
-  message(FATAL_ERROR "non-static drsyms not supported for Linux")
-endif ()
-
-option(TEST_SUITE "we are running a series of builds for official purposes")
-
-# Dr. Memory
-set(TOOL_DR_MEMORY ON)
-set(toolname drmemory)
-set(tooldir ${toolname})
-set(toolname_cap DrMemory)
-set(toolname_cap_spc "Dr. Memory")
-set(DEFINES ${DEFINES} -DTOOL_DR_MEMORY)
-set(DRSYMS_DEFAULT ON)
-
-# We use a monotonically increasing integer that's larger than any bugfix
-# release version as the patchlevel ver# to distinguish
-# We used to use the svn revision (i#83) and we leave that code in place
-# (for now at least) for anyone building an old checkout.
-# For git, we follow DRi#1565 and use a date.
-set(VERSION_NUMBER_PATCHLEVEL 0)
-if (EXISTS "${PROJECT_SOURCE_DIR}/.svn")
-  find_program(SVN svn DOC "subversion client")
-  if (SVN)
-    execute_process(COMMAND ${SVN} info
-      WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}"
-      RESULT_VARIABLE svn_result
-      ERROR_VARIABLE svn_err
-      OUTPUT_VARIABLE svn_out)
-    if (svn_result OR svn_err)
-      message(FATAL_ERROR "*** ${SVN} info failed: ***\n${svn_result} ${svn_err}")
-    endif (svn_result OR svn_err)
-    string(REGEX MATCH "Revision: [0-9]+" svn_out "${svn_out}")
-    string(REGEX REPLACE "Revision: " "" svn_out "${svn_out}")
-    set(VERSION_NUMBER_PATCHLEVEL "${svn_out}")
-  endif (SVN)
-else (EXISTS "${PROJECT_SOURCE_DIR}/.svn")
-  if (EXISTS "${PROJECT_SOURCE_DIR}/.git")
-    find_program(GIT git DOC "git client")
-    if (GIT)
-      # We want the committer date (not author date) (xref DRi#1565).  We request
-      # UNIX timestamp format and then divide down to days to get a small enough
-      # number for the Windows resource limits.
-      execute_process(COMMAND ${GIT} log -n 1 --format=%ct
-        WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}"
-        RESULT_VARIABLE git_result
-        ERROR_VARIABLE git_err
-        OUTPUT_VARIABLE git_out)
-      if (git_result OR git_err)
-        message("*** ${GIT} log failed: ***\n${git_err}")
-      else (git_result OR git_err)
-        math(EXPR daycount "${git_out} / (60*60*24)")
-      endif (git_result OR git_err)
-    endif (GIT)
-    if (NOT daycount)
-      # XXX DRi#1565: to support building when not in a git repo (e.g., from a source
-      # tarball) we use date to get current time for timestamp.
-      # This is not ideal as it confuses the build timestamp with the commit
-      # timestamp.  We should add support for a local file holding the version.
-      find_program(DATE date DOC "system date")
-      if (DATE)
-        execute_process(COMMAND ${DATE} +%s
-          RESULT_VARIABLE date_result
-          ERROR_VARIABLE date_err
-          OUTPUT_VARIABLE date_out)
-        if (date_result OR date_err)
-          message("*** ${DATE} failed: ***\n${date_err}")
-        else (date_result OR date_err)
-          math(EXPR daycount "${date_out} / (60*60*24)")
-        endif (date_result OR date_err)
-      endif (DATE)
-    endif (NOT daycount)
-    if (NOT daycount)
-      # set a much further date in the future to avoid confusing
-      # this fake date with the real date from git log
-      set(daycount 33333)
-    endif (NOT daycount)
-    set(VERSION_NUMBER_PATCHLEVEL "${daycount}")
-  endif (EXISTS "${PROJECT_SOURCE_DIR}/.git")
-endif (EXISTS "${PROJECT_SOURCE_DIR}/.svn")
-
-if (APPLE)
-  # clang linker disallows any but major # being >= 256 (1024 for x64) so we do
-  # mod 200 (we assume we'll never confuse versions 200 apart) and add 56 (to
-  # distinguish from real releases).
-  math(EXPR VERSION_NUMBER_PATCHLEVEL "(${VERSION_NUMBER_PATCHLEVEL} % 200) + 56")
-endif (APPLE)
-
-set(VERSION_NUMBER_DEFAULT "1.11.${VERSION_NUMBER_PATCHLEVEL}")
-# do not store the default TOOL_VERSION_NUMBER in the cache to prevent a stale one
-# from preventing future version updates in a pre-existing build dir.
-# avoid "VERSION_NUMBER" name since conflics w/ DR's var
-set(TOOL_VERSION_NUMBER "" CACHE STRING "Version number: leave empty for default")
-if ("${TOOL_VERSION_NUMBER}" STREQUAL "")
-  set(TOOL_VERSION_NUMBER ${VERSION_NUMBER_DEFAULT})
-endif()
-message(STATUS "Dr. Memory version number: ${TOOL_VERSION_NUMBER}")
-
-# Avoid "BUILD_NUMBER" name since conflics w/ DR's var
-set(TOOL_BUILD_NUMBER "1" CACHE STRING "Build number (must be <64K)")
-# However, we do want to set it to avoid "custom build" in messages
-# from embedded DR when run alone (i#1717's dr_set_client_version_string() has
-# already solved this for messages for DrMem on DR).  To make it easy to
-# correlate, we set it to a formula computed from the DrMem ver.
-string(REPLACE "." ";" ver_list ${TOOL_VERSION_NUMBER})
-list(GET ver_list 0 TOOL_VERSION_MAJOR)
-list(GET ver_list 1 TOOL_VERSION_MINOR)
-math(EXPR BUILD_NUMBER
-  "${TOOL_VERSION_MAJOR}*100 + ${TOOL_VERSION_MINOR}*10 + ${VERSION_NUMBER_PATCHLEVEL}")
-
-string(REGEX REPLACE "\\." "," TOOL_VERSION_COMMAS "${TOOL_VERSION_NUMBER}")
-
-set(DEFINES ${DEFINES}
-  -DBUILD_NUMBER=${TOOL_BUILD_NUMBER}
-  -DVERSION_NUMBER=${TOOL_VERSION_NUMBER}
-  -DVERSION_STRING="${TOOL_VERSION_NUMBER}"
-  -DVERSION_COMMAS=${TOOL_VERSION_COMMAS})
-
-# i#44/PR 243532: online symbol access
-option(USE_DRSYMS "use drsyms DR Extension online symbols instead of post-processing"
-  ${DRSYMS_DEFAULT})
-if (USE_DRSYMS)
-  set(DEFINES ${DEFINES} -DUSE_DRSYMS)
-endif (USE_DRSYMS)
-
-set(PERL_TO_EXE OFF)
-
-if (CMAKE_C_SIZEOF_DATA_PTR EQUAL 8 OR CMAKE_CXX_SIZEOF_DATA_PTR EQUAL 8)
-  set(X64 ON)
-  set(LIB_ARCH "lib64")
-  set(BIN_ARCH "bin64")
-  set(DEFINES ${DEFINES} -DX64)
-else()
-  set(X64 OFF)
-  set(LIB_ARCH "lib32")
-  set(BIN_ARCH "bin32")
-endif ()
-
-if ("${CMAKE_BUILD_TYPE}" MATCHES "Debug")
-  # FIXME: use a configure.h
-  set(DEFINES ${DEFINES} -DDEBUG -DSTATISTICS)
-  set(DEBUG_BUILD ON) # "DEBUG" conflicts w/ DR
-else ()
-  # We want Windows pdb and Unix line #s for release build.
-  # We make separate debug info for Unix, and are fine shipping it to users
-  # in any case as we're open-source.
-  set(CMAKE_BUILD_TYPE "RelWithDebInfo")
-  set(DEBUG_BUILD OFF)
-endif ()
-
-string(TOUPPER "${CMAKE_BUILD_TYPE}" CMAKE_BUILD_TYPE_UPPER)
-
-# i#1781: cmake 2.8.12+ fails to create static lib pdb by default
-# XXX: we should share this with DR's copy
-macro(add_static_lib_debug_info target dest_dir)
-  if (WIN32)
-    if ("${CMAKE_VERSION}" VERSION_EQUAL "3.1" OR
-        "${CMAKE_VERSION}" VERSION_GREATER "3.1")
-      append_property_string(TARGET ${target}
-        COMPILE_PDB_NAME${location_suffix} "${target}"
-        COMPILE_PDB_OUTPUT_DIRECTORY{location_suffix} "${dest_dir}")
-    else ()
-      # We just don't support it for < 3.1
-    endif ()
-  endif ()
-endmacro()
-
-if (UNIX)
-  # there's no cmake warning control so we hardcode it
-  # disabling strict aliasing since giving weird warning I'm not sure how to fix:
-  #   alloc.c:716: warning: dereferencing type-punned pointer will break strict-aliasing rules
-  set(WARN "-Wall -Werror -Wno-strict-aliasing")
-  if (CMAKE_C_COMPILER MATCHES "/build/toolchain")
-    # needed for linux/ipmi.h (PR 531644)
-    set(EXTRA_FLAGS "-idirafter /build/toolchain/lin32/glibc-2007q3-51/usr/include")
-  else ()
-    if (APPLE AND NOT CMAKE_COMPILER_IS_GNUCC)
-      # Ensure our binaries can run on older OSX
-      set(EXTRA_FLAGS "-mmacosx-version-min=10.9")
-    else ()
-      set(EXTRA_FLAGS "")
-    endif ()
-  endif ()
-  if (ARM)
-    set(EXTRA_FLAGS "${EXTRA_FLAGS} -mthumb -march=armv7-a")
-    if (ANDROID OR CMAKE_C_LIBRARY_ARCHITECTURE MATCHES "gnueabi$")
-      set(EXTRA_FLAGS "${EXTRA_FLAGS} -mfloat-abi=softfp")
-      # Android requires PIE.  We export symbols to match our test assumptions.
-      set(CMAKE_EXE_LINKER_FLAGS
-        "${CMAKE_EXE_LINKER_FLAGS} -fPIE -pie -Wl,--export-dynamic")
-    endif ()
-  endif ()
-  set(CMAKE_C_FLAGS_${CMAKE_BUILD_TYPE_UPPER}
-    "${CMAKE_C_FLAGS_${CMAKE_BUILD_TYPE_UPPER}} ${ARCH_CFLAGS} ${WARN} ${EXTRA_FLAGS}")
-  set(CMAKE_CXX_FLAGS_${CMAKE_BUILD_TYPE_UPPER}
-    "${CMAKE_CXX_FLAGS_${CMAKE_BUILD_TYPE_UPPER}} ${ARCH_CFLAGS} ${WARN} ${EXTRA_FLAGS}")
-else (UNIX)
-  # FIXME i#1204: fix warnings and up to /W4
-  set(WARN "/W2 /WX")
-  # update flags for our types and Debug (tests always use Debug).
-  # ok to double-update b/c these are are regex-replace.
-  foreach (config ${CMAKE_BUILD_TYPE} ${CMAKE_CONFIGURATION_TYPES} Debug)
-    string(TOUPPER "${config}" config_upper)
-    foreach (var CMAKE_C_FLAGS;CMAKE_CXX_FLAGS;
-        CMAKE_C_FLAGS_${config_upper};
-        CMAKE_CXX_FLAGS_${config_upper})
-      # default from cmake has /W3 so remove to avoid warning about overriding
-      string(REGEX REPLACE "/W[0-9]" "" ${var} "${${var}}")
-      # /GZ requires RTC runtime support which we don't want (i#925)
-      string(REGEX REPLACE "/GZ" "" ${var} "${${var}}")
-      # avoid warnings (i#925)
-      string(REGEX REPLACE "/GX" "/EHsc" ${var} "${${var}}")
-      if (NOT DEBUG_BUILD)
-        # RelWithDebInfo asks for /Ob1 but we want full inlining
-        string(REGEX REPLACE "/Ob1" "/Ob2" ${var} "${${var}}")
-      endif ()
-    endforeach ()
-  endforeach ()
-  # disable stack protection: "unresolved external symbol ___security_cookie"
-  set(CL_CFLAGS "/GS-")
-  # build in parallel, always.
-  # note that /MP is not officially supported on VS 2005 and others
-  # have seen occasional problems: we'll risk it.  we could check for
-  # "MSVC10 OR MSVC90".
-  set(CL_CFLAGS "${CL_CFLAGS} /MP")
-  if (NOT CMAKE_C_COMPILER_VERSION VERSION_LESS 18.0)
-    # i#1376: VS2013 requires /FS w/ multiple cl.exe in parallel (which Ninja
-    # uses).  While /MP is supposed to enable it, it doesn't seem to.
-    # This is recommended after /Fd but it seems to work here.
-    set(CL_CFLAGS "${CL_CFLAGS} /FS")
-  endif()
-  set(CMAKE_C_FLAGS_${CMAKE_BUILD_TYPE_UPPER} "${CMAKE_C_FLAGS_${CMAKE_BUILD_TYPE_UPPER}} ${WARN} ${CL_CFLAGS}")
-endif (UNIX)
-set(CMAKE_CXX_FLAGS_${CMAKE_BUILD_TYPE_UPPER} "${CMAKE_CXX_FLAGS_${CMAKE_BUILD_TYPE_UPPER}} ${ARCH_CFLAGS} ${WARN}")
-string(STRIP "${CMAKE_C_FLAGS_${CMAKE_BUILD_TYPE_UPPER}}"
-  CMAKE_C_FLAGS_${CMAKE_BUILD_TYPE_UPPER})
-string(STRIP "${CMAKE_CXX_FLAGS}" CMAKE_CXX_FLAGS)
-
-if (WIN32)
-  # DRi#1424: target the oldest possible platform we can
-  if (X64)
-    set(os_target "5.02") # Win2003x64/WinXPx64
-  else (X64)
-    if (CMAKE_C_COMPILER_VERSION VERSION_LESS 17.0) # up to and including VS2010
-      set(os_target "5.00") # Win2K
-    else () # VS2012, VS2013
-      set(os_target "5.01") # WinXP
-    endif ()
-  endif (X64)
-  foreach (lflags CMAKE_EXE_LINKER_FLAGS
-      CMAKE_MODULE_LINKER_FLAGS
-      CMAKE_SHARED_LINKER_FLAGS)
-    set(${lflags} "${${lflags}} /subsystem:console,${os_target}")
-  endforeach()
-  message(STATUS "Targeting subsystem ${os_target}")
-endif (WIN32)
-
-if (UNIX)
-  include(CheckIncludeFiles)
-  check_include_files("asm-i386/stat.h" HAVE_ASM_I386)
-  if (HAVE_ASM_I386)
-    # see comments above about adding configure.h
-    set(DEFINES ${DEFINES} -DHAVE_ASM_I386)
-  endif (HAVE_ASM_I386)
-endif (UNIX)
-
-if (UNIX)
-  # We don't want our instrument_init() pre-empted by debug-internal DynamoRIO
-  # that has visible internal routines.
-  CHECK_C_COMPILER_FLAG("-fvisibility=internal" HAVE_FVISIBILITY_INTERNAL)
-  CHECK_C_COMPILER_FLAG("-fvisibility=hidden" HAVE_FVISIBILITY_HIDDEN)
-  # Mac accepts internal but warns about it so we avoid it there.
-  if (HAVE_FVISIBILITY_INTERNAL AND NOT APPLE)
-    set(VISIBILITY "internal")
-  elseif (HAVE_FVISIBILITY_HIDDEN)
-    set(VISIBILITY "hidden")
-  else ()
-    message("${CMAKE_C_COMPILER} missing flag -fvisibility, using linker "
-            "script instead")
-    set(VISIBILITY " ")
-  endif ()
-  if (HAVE_FVISIBILITY_INTERNAL OR HAVE_FVISIBILITY_HIDDEN)
-    set(CMAKE_C_FLAGS_${CMAKE_BUILD_TYPE_UPPER}
-      "${CMAKE_C_FLAGS_${CMAKE_BUILD_TYPE_UPPER}} -fvisibility=${VISIBILITY}")
-  endif ()
-endif (UNIX)
-
-if (WIN32)
-  # Use convention of DynamoRIO sources: DDKROOT env var (or DDK_ROOT cmake var).
-  # We don't require the DDK as dbghelp and symsrv are in the SDK as well, and
-  # we get ntdll_imports.lib from DR.
-  set(DDK_ROOT "$ENV{DDKROOT}" CACHE PATH "Path to DDK or WDK.")
-  if ("${DDK_ROOT}" STREQUAL "")
-    # Check default install path
-    if (EXISTS "$ENV{SYSTEMDRIVE}/WINDDK/3790.1830/")
-      set(DDK_ROOT "$ENV{SYSTEMDRIVE}/WINDDK/3790.1830/")
-    elseif (EXISTS "$ENV{SYSTEMDRIVE}/WINDDK/6000/")
-      set(DDK_ROOT "$ENV{SYSTEMDRIVE}/WINDDK/6000/")
-    elseif (EXISTS "$ENV{SYSTEMDRIVE}/WINDDK/7600.16385.1/")
-      set(DDK_ROOT "$ENV{SYSTEMDRIVE}/WINDDK/7600.16385.1/")
-    endif ()
-  endif ("${DDK_ROOT}" STREQUAL "")
-
-  # We can't include directly from DDK b/c the DDK include dir and VS include
-  # dirs are incompatible, so we have our own copies of the headers we need.
-  include_directories(wininc/psdk wininc/dxsdk)
-
-  # We need a newer version of dbghelp.dll than is in system32/ on 2K or XP.
-  # The versions that come with Debugging Tools for Windows are redistributable:
-  # "you can distribute the DLL with your application".
-  # The dbghelp.dll that comes in system32/ is not redistributable.
-  # We want 6.3+ for full drsyms features.
-  # 5.2 does not work (it's not just slower w/o SymSearch: it fails).
-  # Haven't tested in between.
-  # WINDDK/3790.1830/bin/x86/dbghelp.dll is 6.3.
-  # Older CMake binaries are 32-bit but newer ones can be 64-bit so we
-  # cannot rely on one or the other.
-  if ("$ENV{PROGRAMW6432}" STREQUAL "")
-    if (X64)
-      message(FATAL_ERROR "On 32-bit Windows: 64-bit build not supported")
-    endif ()
-    set(PROGFILES "$ENV{PROGRAMFILES}")
-    set(PROGFILES32 "$ENV{PROGRAMFILES}")
-    set(ARCH_SFX "x86")
-    set(DDK_SFX "i386")
-  else ()
-    set(PROGFILES "$ENV{PROGRAMW6432}")
-    set(PROGFILES32 "$ENV{PROGRAMFILES(x86)}")
-    if (X64)
-      set(ARCH_SFX "x64")
-      set(DDK_SFX "amd64")
-    else (X64)
-      set(ARCH_SFX "x86")
-      set(DDK_SFX "i386")
-    endif (X64)
-  endif ()
-  # Even the VS2005 copy is 6.5 (despite its headers being < 6.3) so we can
-  # use those as well as the later SDK and standalone DTFW versions.
-  set(dbghelp_paths
-    "${DDK_ROOT}/bin/${ARCH_SFX}/dbghelp.dll"
-    "${DDK_ROOT}/tools/tracing/${DDK_SFX}/dbghelp.dll"
-    "${PROGFILES32}/Windows Kits/*/Debuggers/${ARCH_SFX}/dbghelp.dll"
-    # In case if SDK is not installed and we have Visual Studio, dbghelp.dll may be found in the
-    # Visual Studio's directory in subfolders Remote Debugger/x86 or Remote Debugger/x64 (xref i#1956).
-    # We look in both paths (Program Files and Program Files (x86)) because some versions of
-    # Visual Studio put dbghelp.dll in progfiles (especially 2008) and some in progfiles32.
-    "${PROGFILES}/Microsoft Visual Studio */Common7/IDE/Remote Debugger/${ARCH_SFX}/dbghelp.dll"
-    "${PROGFILES32}/Microsoft Visual Studio */Common7/IDE/Remote Debugger/${ARCH_SFX}/dbghelp.dll")
-  if (X64)
-    set(dbghelp_paths ${dbghelp_paths}
-      # For older versions of windbg, x64 dbghelp.dll resides here.
-      "${PROGFILES}/Debugging Tools for Windows (x64)/dbghelp.dll")
-  else (X64)
-    set(dbghelp_paths ${dbghelp_paths}
-      "${PROGFILES}/Microsoft Visual Studio */Common7/IDE/dbghelp.dll"
-      # Putting this last mainly b/c only older versions (like my 6.3) are here.
-      "${PROGFILES}/Debugging Tools for Windows/dbghelp.dll")
-  endif (X64)
-  file(GLOB dbghelp_hint ${dbghelp_paths})
-  # XXX i#908: it seems cmake has trouble to lookup dbghelp.dll in
-  # 64-bit directory, so we just explicitly check several possible locations.
-  # Plus, we don't want system32, but NO_SYSTEM_ENVIRONMENT_PATH also
-  # excludes Program Files, so we avoid find_file() in general.
-  if (dbghelp_hint)
-    # DRi#1219: exclude VS2005 x64 dbghelp as it is buggy
-    list(LENGTH dbghelp_hint dbghelp_max)
-    math(EXPR dbghelp_max "${dbghelp_max} - 1")
-    set(dbghelp_index 0)
-    list(GET dbghelp_hint 0 dbghelp_default)
-    while (X64 AND dbghelp_default MATCHES "Visual Studio 8" AND
-        ${dbghelp_index} LESS ${dbghelp_max})
-      math(EXPR dbghelp_index "${dbghelp_index} + 1")
-      list(GET dbghelp_hint ${dbghelp_index} dbghelp_default)
-    endwhile()
-    if (X64 AND dbghelp_default MATCHES "Visual Studio 8")
-      message(STATUS "Unable to find non-VS2005 dbghelp.dll")
-      set(dbghelp_default "DBGHELP_DLL-NOTFOUND")
-    endif ()
-  else ()
-    set(dbghelp_default "DBGHELP_DLL-NOTFOUND")
-  endif ()
-  set(DBGHELP_DLL "" CACHE STRING
-    "location of dbghelp.dll from recent Debugging Tools for Windows")
-  if ("${DBGHELP_DLL}" STREQUAL "")
-    set(DBGHELP_DLL ${dbghelp_default})
-  endif()
-  if (DBGHELP_DLL-NOTFOUND OR NOT EXISTS "${DBGHELP_DLL}")
-    message(FATAL_ERROR "dbghelp.dll required and not found")
-  else ()
-    message(STATUS "Using ${DBGHELP_DLL}")
-  endif ()
-  set(symsrv_paths
-    "${PROGFILES32}/Windows Kits/*/Debuggers/${ARCH_SFX}/symsrv.dll"
-    # In case if SDK is not installed and we have Visual Studio, symsrv.dll may be found in the
-    # same place as dbghelp.dll (see comment for dbghelp.dll) (xref i#1956).
-    "${PROGFILES}/Microsoft Visual Studio */Common7/IDE/Remote Debugger/${ARCH_SFX}/symsrv.dll"
-    "${PROGFILES32}/Microsoft Visual Studio */Common7/IDE/Remote Debugger/${ARCH_SFX}/symsrv.dll")
-  if (X64)
-    set(symsrv_paths ${symsrv_paths}
-      # For older versions of windbg, x64 symsrv.dll resides here.
-      "${PROGFILES}/Debugging Tools for Windows (x64)/symsrv.dll")
-  else (X64)
-    set(symsrv_paths ${symsrv_paths}
-      "${PROGFILES}/Microsoft Visual Studio */Common7/IDE/symsrv.dll"
-      # Putting this last mainly b/c only older versions (like my 6.3) are here.
-      "${PROGFILES}/Debugging Tools for Windows/symsrv.dll")
-  endif (X64)
-  file(GLOB symsrv_hint ${symsrv_paths})
-  if (symsrv_hint)
-    list(GET symsrv_hint 0 symsrv_default)
-  else ()
-    set(symsrv_default "SYMSRV_DLL-NOTFOUND")
-  endif ()
-  set(SYMSRV_DLL "" CACHE STRING
-    "location of symsrv.dll from recent Debugging Tools for Windows")
-  if ("${SYMSRV_DLL}" STREQUAL "")
-    set(SYMSRV_DLL ${symsrv_default})
-  endif()
-  if (SYMSRV_DLL-NOTFOUND OR NOT EXISTS "${SYMSRV_DLL}")
-    message(FATAL_ERROR "symsrv.dll required and not found")
-  else ()
-    message(STATUS "Using ${SYMSRV_DLL}")
-  endif ()
-
-endif (WIN32)
-
-if (BUILDING_SUB_PACKAGE)
-  set(INSTALL_PREFIX "drmemory/")
-else ()
-  set(INSTALL_PREFIX "")
-endif()
-
-# To run out of build dir we put libs and scripts in dirs that match install layout
-# except minus the toolname prefix dir.
-# The CPack NSIS interface requires a bin/ dir, so for the Windows package
-# we prefix bin/
-# XXX: should clean all this up and normalize across platforms now
-# that we have drsyms on Linux and once we're sure we don't need to
-# support the old layout.
-if (WIN32 AND USE_DRSYMS AND TOOL_DR_MEMORY)
-  set(INSTALL_BIN_PREFIX "${INSTALL_PREFIX}.")
-  set(BUILD_BIN_PREFIX ".")
-elseif (PERL_TO_EXE)
-  # We are only releasing Dr. Memory so no toolnames: would need to create
-  # shortcut or .bat file to run from right dir
-  if (X64)
-    set(INSTALL_BIN_PREFIX "${INSTALL_PREFIX}bin64")
-    set(BUILD_BIN_PREFIX "bin64")
-  else (X64)
-    set(INSTALL_BIN_PREFIX "${INSTALL_PREFIX}bin")
-    set(BUILD_BIN_PREFIX "bin")
-  endif (X64)
-else (PERL_TO_EXE)
-  # Unified layout: match Windows since we're moving toward C-based frontends
-  # that won't have auxiliary scripts we want to hide.
-  set(INSTALL_BIN_PREFIX "${INSTALL_PREFIX}.")
-  set(BUILD_BIN_PREFIX ".")
-endif (WIN32 AND USE_DRSYMS AND TOOL_DR_MEMORY)
-# For NSIS we have everything in top-level bin/
-# Once we have x64 we'll need to address: fix CPack?
-if (X64)
-  set(INSTALL_BIN "${INSTALL_BIN_PREFIX}/bin64")
-  set(BUILD_BIN "${BUILD_BIN_PREFIX}/bin64")
-else (X64)
-  set(INSTALL_BIN "${INSTALL_BIN_PREFIX}/bin")
-  set(BUILD_BIN "${BUILD_BIN_PREFIX}/bin")
-endif (X64)
-if (DEBUG_BUILD)
-  set(build_type "debug")
-else (DEBUG_BUILD)
-  set(build_type "release")
-endif (DEBUG_BUILD)
-set(INSTALL_LIB "${INSTALL_BIN}/${build_type}")
-set(BUILD_LIB "${BUILD_BIN}/${build_type}")
-
-set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/${BUILD_LIB}")
-set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}")
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/${BUILD_BIN}")
-if ("${CMAKE_GENERATOR}" MATCHES "Visual Studio")
-  # we don't support the Debug and Release subdirs
-  foreach (config ${CMAKE_CONFIGURATION_TYPES})
-    string(TOUPPER "${config}" config_upper)
-    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_${config_upper}
-      "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
-    set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY_${config_upper}
-      "${CMAKE_ARCHIVE_OUTPUT_DIRECTORY}")
-    set(CMAKE_LIBRARY_OUTPUT_DIRECTORY_${config_upper}
-      "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}")
-  endforeach ()
-endif ()
-
-##################################################
-# option sharing (PR 478146)
-
-set(CPP_IGNORE_EMPTY "")
-if (UNIX)
-  if (APPLE)
-    # /usr/bin/cpp is broken and won't honor -B flags
-    set(CMAKE_CPP_FOR_OPS ${CMAKE_C_COMPILER})
-    set(CPP_INC -Wp,-I,)
-    # Avoid clang warning on perl ''
-    set(CPP_IGNORE_EMPTY -Wno-invalid-pp-token)
-  else (APPLE)
-    # "gcc -E" on a non-.c-extension file gives message:
-    #   "linker input file unused because linking not done"
-    # and doesn't produce any output, so we must use cpp for our .asm files.
-    # we assume it's in the same dir.
-    get_filename_component(compiler_path ${CMAKE_C_COMPILER} PATH)
-    find_program(CMAKE_CPP_FOR_OPS cpp HINTS "${compiler_path}"
-      DOC "path to C preprocessor")
-    if (cpp-NOTFOUND OR NOT EXISTS "${CMAKE_CPP_FOR_OPS}")
-      message(FATAL_ERROR "cpp is required to build")
-    endif (cpp-NOTFOUND OR NOT EXISTS "${CMAKE_CPP_FOR_OPS}")
-    mark_as_advanced(CMAKE_CPP_FOR_OPS)
-    set(CPP_INC -I)
-  endif (APPLE)
-  set(CPP_NO_LINENUM -P)
-else (UNIX)
-  set(CMAKE_CPP_FOR_OPS ${CMAKE_C_COMPILER})
-  set(CPP_NO_LINENUM /EP)
-  set(CPP_INC /I)
-endif (UNIX)
-
-##################################################
-# utility functions
+cmake_minimum_required(VERSION 3.2)
 
 function (append_property_string type target name value)
   # XXX: if we require cmake 2.8.6 we can simply use APPEND_STRING
@@ -650,97 +58,102 @@ function (set_output_dirs dir)
   endif ()
 endfunction (set_output_dirs)
 
-##################################################
-# find DynamoRIO so tests has its path, but don't include it or run
-# its configure commands to avoid changing cflags:
+# To match Makefiles and have just one build type per configured build
+# dir, we collapse VS generator configs to a single choice.
+# This must be done prior to the project() command and the var
+# must be set in the cache.
+if ("${CMAKE_GENERATOR}" MATCHES "Visual Studio")
+  if (DEBUG OR "${CMAKE_BUILD_TYPE}" MATCHES "Debug")
+    set(CMAKE_CONFIGURATION_TYPES "Debug" CACHE STRING "" FORCE)
+  else ()
+    # Go w/ debug info (i#1392)
+    set(CMAKE_CONFIGURATION_TYPES "RelWithDebInfo" CACHE STRING "" FORCE)
+  endif ()
+  # we want to use the _LOCATION_<config> property
+  string(TOUPPER "${CMAKE_CONFIGURATION_TYPES}" upper)
+  set(location_suffix "_${upper}")
+else ("${CMAKE_GENERATOR}" MATCHES "Visual Studio")
+  set(location_suffix "")
+endif ("${CMAKE_GENERATOR}" MATCHES "Visual Studio")
 
-# DR clobbers the global cflags, so we save and then restore them for
-# our tests (and ourselves for non-pre-built DR).
-# configure_DynamoRIO_client() also does so we do this even for pre-built DR
-# for tests.
-foreach (config "" ${CMAKE_BUILD_TYPE} ${CMAKE_CONFIGURATION_TYPES})
-  if ("${config}" STREQUAL "")
-    set(config_upper "")
-  else ("${config}" STREQUAL "")
-    string(TOUPPER "_${config}" config_upper)
-  endif ("${config}" STREQUAL "")
-  foreach (var CMAKE_C_FLAGS${config_upper};CMAKE_CXX_FLAGS${config_upper})
-    set(SAVE_${var} "${${var}}")
-  endforeach (var)
-endforeach (config)
+project(drltrace)
 
-# we write DynamoRIO_DIR to the cache, so on re-interpreting the file later
-# we can't tell whether the user set a value or not. we could
-# use a differently-named var for the user but instead we check vs
-# the local build path to avoid breaking existing scripts.
-set(LOCAL_DynamoRIO_DIR "${PROJECT_BINARY_DIR}/dynamorio/cmake")
-if (DEFINED DynamoRIO_DIR AND NOT "${DynamoRIO_DIR}" STREQUAL "${LOCAL_DynamoRIO_DIR}")
-  set(USER_SPECIFIED_DynamoRIO_DIR ON)
-else ()
-  set(USER_SPECIFIED_DynamoRIO_DIR OFF)
+if ("${CMAKE_VERSION}" VERSION_EQUAL "3.0" OR
+    "${CMAKE_VERSION}" VERSION_GREATER "3.0")
+  # XXX i#1557: update our code to satisfy the changes in 3.x
+  cmake_policy(SET CMP0026 OLD)
+  # XXX i#1375: if we make 2.8.12 the minimum we can remove the @rpath
+  # Mac stuff and this policy, right?
+  cmake_policy(SET CMP0042 OLD)
 endif ()
 
-# when updating this, also update the git submodule
-set(DynamoRIO_VERSION_REQUIRED "6.1.17042")
+set(output_dir "${PROJECT_BINARY_DIR}/bin")
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${output_dir}")
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}")
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${output_dir}")
+if ("${CMAKE_GENERATOR}" MATCHES "Visual Studio")
+  # we don't support the Debug and Release subdirs
+  foreach (config ${CMAKE_CONFIGURATION_TYPES})
+    string(TOUPPER "${config}" config_upper)
+    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_${config_upper}
+      "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
+    set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY_${config_upper}
+      "${CMAKE_ARCHIVE_OUTPUT_DIRECTORY}")
+    set(CMAKE_LIBRARY_OUTPUT_DIRECTORY_${config_upper}
+      "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}")
+  endforeach ()
+endif ()
 
-set(DR_install_dir "dynamorio")
+option(SHOW_RESULTS
+  "Display client results in pop-up (Windows) or console message (Linux)"
+  ${SHOW_RESULTS_DEFAULT})
+if (SHOW_RESULTS)
+  add_definitions(-DSHOW_RESULTS)
+endif (SHOW_RESULTS)
 
-if (USER_SPECIFIED_DynamoRIO_DIR)
-  # i#67: relative dirs are not really supported in find_package: they're
-  # relative to source dir not build dir, so we change that here.
-  # we can't do get_filename_component(... ABSOLUTE) b/c it's relative to
-  # source dir as well.
-  if ("${DynamoRIO_DIR}" MATCHES "^\\.\\.")
-    get_filename_component(DynamoRIO_DIR "${PROJECT_BINARY_DIR}/${DynamoRIO_DIR}" ABSOLUTE)
-  endif ()
-  # exit if it doesn't exist since very misleading if find_package() goes
-  # and finds some other version from what was requested
-  if (NOT EXISTS "${DynamoRIO_DIR}/DynamoRIOConfig.cmake")
-    message(FATAL_ERROR "${DynamoRIO_DIR}/DynamoRIOConfig.cmake does not exist: invalid DynamoRIO_DIR")
-  endif ()
+option(SHOW_SYMBOLS "Use symbol lookup in clients that support it" ON)
+if (SHOW_SYMBOLS)
+  add_definitions(-DSHOW_SYMBOLS)
+endif (SHOW_SYMBOLS)
+if (NOT DEFINED GENERATE_PDBS)
+  # support running tests over ssh where pdb building is problematic
+  set(GENERATE_PDBS ON)
+endif (NOT DEFINED GENERATE_PDBS)
 
-  if (BUILDING_SUB_PACKAGE)
-    message(FATAL_ERROR "Sub-package not supported with pre-built DR")
-  endif ()
+# i#379: We usually want to build the samples with optimizations to improve the
+# chances of inlining, but it's nice to be able to turn that off easily.  A
+# release build should already have optimizations, so this should only really
+# affect debug builds.
+option(OPTIMIZE_SAMPLES
+  "Build samples with optimizations to increase the chances of clean call inlining (overrides debug flags)"
+  ON)
+if (WIN32)
+  set(OPT_CFLAGS "/O2")
+else (WIN32)
+  set(OPT_CFLAGS "-O2")
+endif (WIN32)
 
+if (DEBUG)
+  set(OPT_CFLAGS "-DDEBUG")
+endif (DEBUG)
+
+if (DEFINED DynamoRIO_DIR)
   message(STATUS "Attempting to use pre-built DynamoRIO: ${DynamoRIO_DIR}")
-  find_package(DynamoRIO ${DynamoRIO_VERSION_REQUIRED})
+  set(USER_SPECIFIED_DynamoRIO_DIR ON)
+  set(user_DynamoRIO_DIR "dynamorio/cmake" CACHE PATH "DynamoRIO installation's cmake directory")
+  get_filename_component(DynamoRIO_DIR "${PROJECT_BINARY_DIR}/${user_DynamoRIO_DIR}" ABSOLUTE)
+  find_package(DynamoRIO)
   if (NOT DynamoRIO_FOUND)
     message(FATAL_ERROR "DynamoRIO package required to build")
   endif(NOT DynamoRIO_FOUND)
-  # from here on use what was found, not what was passed in
-  get_filename_component(DynamoRIO_DIR "${DynamoRIO_CONFIG}" PATH)
-  # preserve real value in the cache so it's easy to tell
-  set(DynamoRIO_DIR "${DynamoRIO_DIR}" CACHE PATH "Path to DynamoRIO.")
-  message(STATUS "DynamoRIO that matches: ${DynamoRIO_VERSION} in ${DynamoRIO_DIR}")
-else (USER_SPECIFIED_DynamoRIO_DIR)
-  # Build from our local copy of the sources, coming from a git submodule: i#74.
-  set(DynamoRIO_DIR "${LOCAL_DynamoRIO_DIR}" CACHE PATH "Path to DynamoRIO.")
+else ()
+  set(USER_SPECIFIED_DynamoRIO_DIR OFF)
+  set(DynamoRIO_DIR "${PROJECT_BINARY_DIR}/dynamorio/cmake" CACHE PATH "Path to DynamoRIO.")
   message(STATUS "Building DynamoRIO from local sources ${DynamoRIO_DIR}")
-
-  # We include DynamoRIO as a subdir here to make it easy to use the
-  # DynamoRIOConfig.cmake at configure time: however, that also means we have
-  # potential conflicts in CMake's global option and target space.
-  # Ideally, DynamoRIO would prefix all its options and targets with "DR_"
-  # or something.  For now we live w/ the ugliness.
-  # (An alternative would be to use the ExternalProject feature: but
-  # then we don't have DynamoRIOConfig.cmake at config time and we'd
-  # either need a parent build project or to hack our find_package().)
-
-  # it seems that we must set these in the cache for the subproj to see them:
-  set(BUILD_DOCS OFF CACHE BOOL "DynamoRIO option: build client samples")
-  set(BUILD_SAMPLES OFF CACHE BOOL "DynamoRIO option: build documentation")
-  # our local DR build matches our own build type
   if ("${CMAKE_BUILD_TYPE}" MATCHES "Debug")
     set(DEBUG ON CACHE BOOL "DynamoRIO option: debug build")
     set(INTERNAL ON CACHE BOOL "DynamoRIO option: internal build")
   endif ("${CMAKE_BUILD_TYPE}" MATCHES "Debug")
-  if (DRM_COPY_TO_DEVICE)
-    set(DR_COPY_TO_DEVICE ON CACHE BOOL "DynamoRIO option: copy to Android")
-    get_filename_component(builddir ${PROJECT_BINARY_DIR} NAME)
-    set(DR_DEVICE_BASEDIR "${DRM_DEVICE_BASEDIR}/${builddir}" CACHE STRING
-      "DynamoRIO option: Android path")
-  endif ()
   # We do not want DR install, except for the targets we need for our
   # multi-export-set install of the DRMF.  We need those targets
   # even for BUILDING_SUB_PACKAGE.
@@ -763,7 +176,7 @@ else (USER_SPECIFIED_DynamoRIO_DIR)
   set(DR_INSTALL_DEPLOY_BIN_DEST ${DR_install_dir}/${BIN_ARCH})
 
   add_subdirectory(dynamorio)
-
+  
   # don't show DR options in drmem cmake list
   # to really hide we should mark as INTERNAL but not worth it since would
   # have to do for all of DR's many options.
@@ -796,123 +209,181 @@ else (USER_SPECIFIED_DynamoRIO_DIR)
       set(${var} "${SAVE_${var}}")
     endforeach (var)
   endforeach (config)
-endif (USER_SPECIFIED_DynamoRIO_DIR)
+  
+endif ()
 
-if (USER_SPECIFIED_DynamoRIO_DIR)
-  # if we're building from our own DR, DR adds this option for us
-  option(GENERATE_PDBS "generate Windows debug information" ON)
-  mark_as_advanced(GENERATE_PDBS)
-endif (USER_SPECIFIED_DynamoRIO_DIR)
-
-# This must be before any add_library() or add_executable()
-# but that means for local DR sources we haven't yet included
-# DR's option(), so we check whether defined.
-if (DEFINED GENERATE_PDBS AND NOT GENERATE_PDBS)
-  # Default from cmake in DEBUG and RELWITHDEBINFO has /debug
-  foreach (var CMAKE_C_FLAGS;CMAKE_CXX_FLAGS;
-      CMAKE_C_FLAGS_${CMAKE_BUILD_TYPE_UPPER};
-      CMAKE_CXX_FLAGS_${CMAKE_BUILD_TYPE_UPPER};
-      # tests are always built as Debug
-      CMAKE_C_FLAGS_DEBUG;CMAKE_CXX_FLAGS_DEBUG)
-    string(REGEX REPLACE "/Zi" "" ${var} "${${var}}")
-  endforeach ()
-  foreach (var CMAKE_EXE_LINKER_FLAGS_${CMAKE_BUILD_TYPE_UPPER};
-      CMAKE_MODULE_LINKER_FLAGS_${CMAKE_BUILD_TYPE_UPPER};
-      CMAKE_SHARED_LINKER_FLAGS_${CMAKE_BUILD_TYPE_UPPER};
-      # tests are always built as Debug
-      CMAKE_EXE_LINKER_FLAGS_DEBUG;
-      CMAKE_MODULE_LINKER_FLAGS_DEBUG;
-      CMAKE_SHARED_LINKER_FLAGS_DEBUG)
-    string(REGEX REPLACE "/debug" "" ${var} "${${var}}")
-  endforeach ()
-endif (DEFINED GENERATE_PDBS AND NOT GENERATE_PDBS)
-
-# Shrink binaries and pdbs (/Gy should already be there)
 if (WIN32)
-  foreach (var CMAKE_EXE_LINKER_FLAGS_${CMAKE_BUILD_TYPE_UPPER};
-      CMAKE_MODULE_LINKER_FLAGS_${CMAKE_BUILD_TYPE_UPPER};
-      CMAKE_SHARED_LINKER_FLAGS_${CMAKE_BUILD_TYPE_UPPER})
-    set(${var} "${${var}} /opt:ref /opt:icf /pdbcompress")
-  endforeach ()
+  # disable stack protection: "unresolved external symbol ___security_cookie"
+  # disable the warning "unreferenced formal parameter" #4100
+  # disable the warning "conditional expression is constant" #4127
+  # disable the warning "cast from function pointer to data pointer" #4054
+  set(CL_CFLAGS "/GS- /wd4100 /wd4127 /wd4054")
+  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${CL_CFLAGS}")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${CL_CFLAGS}")
+  add_definitions(-D_CRT_SECURE_NO_WARNINGS)
+endif (WIN32)
+
+if (OPTIMIZE_SAMPLES)
+  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OPT_CFLAGS}")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OPT_CFLAGS}")
 endif ()
 
-if (APPLE)
-  # install_name_tool needs write access (i#1372)
-  set(owner_access OWNER_READ OWNER_WRITE)
-else (APPLE)
-  set(owner_access OWNER_READ)
-endif (APPLE)
+#include(${PROJECT_SOURCE_DIR}/make/policies.cmake NO_POLICY_SCOPE)
 
 ##################################################
-# assembly support
+# drltracelib
 
-# set up assembly support and CMAKE_CPP
-set(old_debug ${DEBUG})
-set(DEBUG ON) # ensure we get debug info
-include(${DynamoRIO_DIR}/cpp2asm_support.cmake)
-set(DEBUG ${old_debug})
+set(srcs
+    drltrace.cpp
+    drltrace_libcalls.cpp
+    drltrace_options.cpp
+    drltrace_utils.cpp)
 
-if (UNIX)
-  if (NOT CMAKE_ASM_SUPPORTS_INTEL_SYNTAX)
-    message(FATAL_ERROR "${CMAKE_ASM_COMPILER} does not support required flags")
-  endif (NOT CMAKE_ASM_SUPPORTS_INTEL_SYNTAX)
-endif (UNIX)
-# for cpp2asm_defines.h
-include_directories(${DynamoRIO_DIR})
+#if (WIN32)
+#  set(srcs ${srcs} ${PROJECT_SOURCE_DIR}/make/resources.rc)
+#endif ()
 
-# XXX: even if we went to a configure.h, we wouldn't have the DR platform
-# defines there unless we duplicated them.
-if (UNIX)
-  if (APPLE)
-    set(DEFINES ${DEFINES} -DASSEMBLE_WITH_NASM)
-  else (APPLE)
-    set(DEFINES ${DEFINES} -DASSEMBLE_WITH_GAS)
-  endif (APPLE)
-else (UNIX)
-  set(DEFINES ${DEFINES} -DASSEMBLE_WITH_MASM)
-endif (UNIX)
-get_DynamoRIO_defines(DR_DEFINES OFF)
-# We need defines to be a list to pass as separate args to custom command.
-# We assume none have spaces inside them which seems reasonable.
-string(REPLACE " " ";" DR_DEFINES "${DR_DEFINES}")
-set(asm_defs ${DR_DEFINES} ${DEFINES} -I "${DynamoRIO_DIR}")
+set(DynamoRIO_USE_LIBC OFF)
 
-set(asm_deps "${DynamoRIO_DIR}/cpp2asm_defines.h")
+set(TOOLNAME "drltrace")
 
-if (ARM)
-  set(asm_file "asm_utils_arm.asm")
+add_library(drltracelib SHARED ${srcs})
+
+# We share the framework version # for now
+#set_library_version(drltracelib ${DRMF_VERSION_MAJOR_MINOR})
+
+if (WIN32)
+  set_property(TARGET drltracelib PROPERTY COMPILE_DEFINITIONS
+    "${DEFINES_NO_D};RC_IS_DRLTRACELIB")
 else ()
-  set(asm_file "asm_utils_x86.asm")
+  set_property(TARGET drltracelib PROPERTY COMPILE_DEFINITIONS ${DEFINES_NO_D})
 endif ()
-add_asm_target(common/${asm_file} asm_utils_src asm_utils_tgt ""
-  "${asm_defs}" "${asm_deps}")
+
+set(DynamoRIO_RPATH ON)
+set_target_properties(drltracelib PROPERTIES
+  RUNTIME_OUTPUT_DIRECTORY${location_suffix} "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}")
+
+  
+configure_DynamoRIO_client(drltracelib)
+
+use_DynamoRIO_extension(drltracelib drmgr_static)
+use_DynamoRIO_extension(drltracelib drwrap_static)
+use_DynamoRIO_extension(drltracelib drx_static)
+use_DynamoRIO_extension(drltracelib drcovlib_static)
+use_DynamoRIO_extension(drltracelib droption)
+
+# XXX i#2429: DR's droption.h includes both <string.h> and <string.h>
+# we should remove <string.h> and replace the strcmp comparison with
+# a std::string. Then we can remove special if here and below.
+if (UNIX)
+  # to avoid conflicts with new declaration with "C" linkage in utils.h
+  append_property_string(TARGET drltracelib COMPILE_FLAGS "-DNOLINK_STRCASESTR")
+endif()
+if ("${CMAKE_GENERATOR}" MATCHES "Visual Studio")
+  # i#1805: see comment in drstrace/CMakeLists.txt
+  append_property_string(TARGET drltracelib LINK_FLAGS "/force:multiple")
+endif ()
+
+# setup everything to be able to run drltrace
+
+if (CMAKE_C_SIZEOF_DATA_PTR EQUAL 8 OR CMAKE_CXX_SIZEOF_DATA_PTR EQUAL 8)
+  set(X64 ON)
+  set(LIB_ARCH "lib64")
+  set(BIN_ARCH "bin64")
+  set(DEFINES ${DEFINES} -DX64)
+else()
+  set(X64 OFF)
+  set(LIB_ARCH "lib32")
+  set(BIN_ARCH "bin32")
+endif ()
+
+if (WIN32)
+  if (USER_SPECIFIED_DynamoRIO_DIR)
+    # already built so we can copy at config time
+    configure_file("${DynamoRIO_DIR}/../${LIB_ARCH}/drconfiglib.dll"
+      "${output_dir}/drconfiglib.dll" COPYONLY)
+    configure_file("${DynamoRIO_DIR}/../${LIB_ARCH}/drinjectlib.dll"
+      "${output_dir}/drinjectlib.dll" COPYONLY)
+    configure_file("${DynamoRIO_DIR}/../${LIB_ARCH}/${CMAKE_BUILD_TYPE}/dynamorio.dll"
+        "${output_dir}/dynamorio.dll" COPYONLY)
+  else (USER_SPECIFIED_DynamoRIO_DIR)
+    # XXX: I can't get "TARGET drconfiglib POST_BUILD" to work, maybe b/c
+    # the target is in a subdir?
+    set(drconfiglib_copy "${output_dir}/drconfiglib.dll")
+    add_custom_target(drconfiglib_copy_tgt ALL DEPENDS "${drconfiglib_copy}")
+    add_custom_command(OUTPUT "${drconfiglib_copy}" DEPENDS drconfiglib
+      COMMAND ${CMAKE_COMMAND}
+      ARGS -E copy "${DynamoRIO_DIR}/../${LIB_ARCH}/drconfiglib.dll"
+      "${drconfiglib_copy}" VERBATIM)
+    set(drinjectlib_copy "${output_dir}/drinjectlib.dll")
+    add_custom_target(drinjectlib_copy_tgt ALL DEPENDS "${drinjectlib_copy}")
+    add_custom_command(OUTPUT "${drinjectlib_copy}" DEPENDS drinjectlib
+      COMMAND ${CMAKE_COMMAND}
+      ARGS -E copy "${DynamoRIO_DIR}/../${LIB_ARCH}/drinjectlib.dll"
+      "${drinjectlib_copy}" VERBATIM)
+
+    set(drdll_copy "${output_dir}/dynamorio.dll")
+    add_custom_target(drdll_copy_tgt ALL DEPENDS "${drdll_copy}")
+    add_custom_command(OUTPUT "${drdll_copy}" DEPENDS dynamorio
+        COMMAND ${CMAKE_COMMAND}
+        ARGS -E copy "${DynamoRIO_DIR}/../${LIB_ARCH}/${CMAKE_BUILD_TYPE}/dynamorio.dll"
+        "${drdll_copy}" VERBATIM)
+  endif (USER_SPECIFIED_DynamoRIO_DIR)
+endif (WIN32)
 
 ##################################################
+# drltrace frontend
 
-if (ANDROID)
-  # We cache this for us in sub-projects like framework/samples/
-  set(TOP_BINARY_DIR ${PROJECT_BINARY_DIR})
-  get_filename_component(builddir ${TOP_BINARY_DIR} NAME)
-  set(DRM_DEVICE_BINARY_DIR ${DRM_DEVICE_BASEDIR}/${builddir})
+set(front_srcs
+    drltrace_frontend.cpp
+    drltrace_options.cpp)
+#if (WIN32)
+#  set(front_srcs ${front_srcs} ${PROJECT_SOURCE_DIR}/make/resources.rc)
+#endif ()
+
+add_executable(drltrace ${front_srcs})
+
+configure_DynamoRIO_standalone(drltrace)
+
+target_link_libraries(drltrace drinjectlib drconfiglib drfrontendlib)
+
+#set_library_version(drltrace ${DRMF_VERSION})
+
+if (WIN32)
+  set_property(TARGET drltrace PROPERTY COMPILE_DEFINITIONS
+               ${DEFINES_NO_D} RC_IS_DRLTRACE)
+else ()
+  set_property(TARGET drltrace PROPERTY COMPILE_DEFINITIONS ${DEFINES_NO_D})
 endif ()
 
-function (copy_target_to_device target)
-  if (DRM_COPY_TO_DEVICE)
-    DynamoRIO_copy_target_to_device(${target} ${DRM_DEVICE_BASEDIR})
-  endif ()
-endfunction (copy_target_to_device)
+# XXX: see DR's i#2429 and comment above.
+if (UNIX)
+  # to avoid conflicts with new declaration with "C" linkage in utils.h
+  append_property_string(TARGET drltrace COMPILE_FLAGS "-DNOLINK_STRCASESTR")
+endif()
 
-function (copy_file_to_device local_path)
-  if (DRM_COPY_TO_DEVICE)
-    file(RELATIVE_PATH relpath "${TOP_BINARY_DIR}" "${local_path}")
-    execute_process(
-      COMMAND ${ADB} push ${local_path} ${DRM_DEVICE_BINARY_DIR}/${relpath}
-      RESULT_VARIABLE adb_result ERROR_VARIABLE adb_err OUTPUT_QUIET)
-    if (adb_result)
-      message(FATAL_ERROR "*** Failed to adb push ${local_path}: ${adb_err} ***\n")
-    endif ()
-  endif ()
-endfunction (copy_file_to_device)
+#install(TARGETS drltrace DESTINATION "${INSTALL_BIN}"
+#  PERMISSIONS ${owner_access} OWNER_EXECUTE GROUP_READ GROUP_EXECUTE
+#  WORLD_READ WORLD_EXECUTE)
+#copy_target_to_device(drltrace)
+#copy_and_adjust_drpaths(${CMAKE_RUNTIME_OUTPUT_DIRECTORY} drltrace)
+
+##################################################
+# drltrace config
+
+set(conf_out ${PROJECT_BINARY_DIR}/${BUILD_BIN}/drltrace.config)
+if (WIN32)
+  configure_file(${CMAKE_CURRENT_SOURCE_DIR}/drltrace_win.config ${conf_out} COPYONLY)
+else ()
+  configure_file(${CMAKE_CURRENT_SOURCE_DIR}/drltrace_linux.config ${conf_out} COPYONLY)
+endif ()
+
+#install(FILES ${conf_out} DESTINATION "${INSTALL_BIN}" PERMISSIONS ${owner_access}
+#        GROUP_READ WORLD_READ)
+#copy_target_to_device(${conf_out})
+
+##################################################
+# drltrace tests
 
 function (get_target_path_for_execution out target)
   if (ANDROID)
@@ -923,521 +394,57 @@ function (get_target_path_for_execution out target)
   set(${out} ${local} PARENT_SCOPE)
 endfunction (get_target_path_for_execution)
 
-function (convert_local_path_to_device_path out local_path)
-  if (ANDROID)
-    file(RELATIVE_PATH relpath "${TOP_BINARY_DIR}" "${local_path}")
-    set(local ${DRM_DEVICE_BINARY_DIR}/${relpath})
-  else ()
-    set(local ${local_path})
-  endif ()
-  set(${out} ${local} PARENT_SCOPE)
-endfunction (convert_local_path_to_device_path)
-
 function (prefix_cmd_if_necessary cmd_out use_ats cmd_in)
   DynamoRIO_prefix_cmd_if_necessary(local ${use_ats} ${cmd_in} ${ARGN})
   set(${cmd_out} ${local} PARENT_SCOPE)
 endfunction (prefix_cmd_if_necessary)
 
-function (copy_and_adjust_drpaths basedir target)
-  if (ANDROID AND DRM_COPY_TO_DEVICE)
-    file(GLOB drpaths ${target}/*${target}*.drpath)
-    foreach(drpath ${drpaths}) # we only expect one though
-      file(READ ${drpath} contents)
-      string(REPLACE "${PROJECT_BINARY_DIR}" "${DRM_DEVICE_BINARY_DIR}"
-        contents ${contents})
-      file(WRITE ${drpath} ${contents})
-      copy_file_to_device(${drpath})
-    endforeach ()
-  endif ()
-endfunction ()
-
-if (WIN32)
-  set(FLAG_DISABLE_FPO "/Oy-")
-else (WIN32)
-  set(FLAG_DISABLE_FPO "-fno-omit-frame-pointer")
-endif (WIN32)
-
-function(append_src_compile_flags srcfile new_flags)
-  get_source_file_property(cur_flags ${srcfile} COMPILE_FLAGS)
-  # XXX: if we require cmake 2.8.6 we can simply use APPEND_STRING
-  if (NOT cur_flags)
-    set(cur_flags "")
-  endif (NOT cur_flags)
-  set_source_files_properties(${srcfile} PROPERTIES
-    COMPILE_FLAGS "${cur_flags} ${new_flags}")
-endfunction(append_src_compile_flags)
-
-# new set_property() doesn't want -D but our cpp invocation above does
-string(REGEX REPLACE "-D" "" DEFINES_NO_D "${DEFINES}")
-string(REGEX REPLACE "-D" "" DR_DEFINES_NO_D "${DR_DEFINES}")
-
-option(BUILD_TOOL_TESTS "build Dr. Memory/Dr. Heapstat tests" OFF)
-
-set(BUILD_TOOL_TESTS OFF)
-
-if (WIN32)
-  set(srcs ${srcs} make/resources.rc)
-endif ()
-
-if (NOT USE_DRSYMS)
-  set(scripts ${scripts} postprocess.pl)
-endif (NOT USE_DRSYMS)
-
-macro(set_library_version target number)
-  # We only set the version/soversion on Windows to avoid many
-  # negatives (DRi#1374, DRi#2127, Android "adb push" not supporting
-  # symlinks, etc.) and very few positives on UNIX platforms.  DR's
-  # loader and the DRMF init code perform their own version checks for
-  # client compatibility.
-  if (WINDOWS)
-    set_target_properties(${target} PROPERTIES VERSION ${number})
-  endif ()
-endmacro()
-
-# we want a preferred base to avoid patching pcaches
-set(DynamoRIO_SET_PREFERRED_BASE ON)
-if (ANDROID)
-  # i#1881: 0x73800000 seems to conflict w/ hardcoded Android mmaps.
-  set(PREFERRED_BASE 0x17000000)
-else ()
-  set(PREFERRED_BASE 0x73800000)
-endif ()
-
-# we can handle being tied to a particular DR version (we already are)
-set(DynamoRIO_FAST_IR ON)
-
-set(DynamoRIO_REG_COMPATIBILITY ON)
-if (NOT STATIC_DRSYMS)
-  set(DynamoRIO_USE_LIBC OFF)
-endif (NOT STATIC_DRSYMS)
-
-if (WIN32)
-  # annoying to have ASLR and not on module list
-  # plus, now we require the same base for pcache
-  set(new_flags "/dynamicbase:no")
-
-  # This flag is added by VS generators so we may as well add for Ninja
-  set(new_flags "/nxcompat")
-
-  # Reduce size by stripping out unused code (we don't seem to need /Gy for this,
-  # and VS generators seem to set it already, so we add here for Ninja).
-  # XXX: DRi#2167 is adding this for all clients so we can remove this once
-  # we update to a recent DR.
-  set(new_flags "${new_flags} /opt:ref")
-  if (NOT DEBUG_BUILD)
-    # Match DR's settings, though again it's not clear the benefit w/o /Gy.
-    set(new_flags "${new_flags} /opt:icf")
-  endif()
-
-  if (NOT DEFINED GENERATE_PDBS OR GENERATE_PDBS)
-    set(new_flags "${new_flags} /debug")
-  endif ()
-  if (NOT cur_flags)
-    set(cur_flags "")
-  endif (NOT cur_flags)
-  set_target_properties(${client_target} PROPERTIES
-    LINK_FLAGS "${cur_flags} ${new_flags}")
-endif (WIN32)
-
+# XXX i#1960: add more tests for drltrace that check the output contains
+# expected library calls.
 #
-##################################################
-
-# must be AFTER DR local build since affects subdirs
-include_directories(common ${tooldir})
-
-if (UNIX)
-  set(DISABLE_OPTS "-O0")
-else (UNIX)
-  set(DISABLE_OPTS "/Od")
-endif (UNIX)
-append_src_compile_flags(common/alloc_unopt.c "${DISABLE_OPTS}")
-if (UNIX)
-  # i#1776: avoid an infinite loop in replace_memset.
-  # We have no per-function optimization so we apply to the whole file.
-  append_src_compile_flags(drmemory/replace.c "${DISABLE_OPTS}")
-endif ()
-
-# symbol query tool
-set(symquery_srcs tools/symquery.c)
-if (WIN32)
-  set(symquery_srcs ${symquery_srcs} make/resources.rc)
-endif ()
-add_executable(symquery ${symquery_srcs})
-if (DEFINED DynamoRIO_RPATH)
-  set(old_rpath ${DynamoRIO_RPATH})
-else ()
-  set(old_rpath OFF)
-endif ()
-set(DynamoRIO_RPATH ON)
-configure_DynamoRIO_standalone(symquery)
-use_DynamoRIO_extension(symquery drsyms_static)
-set(DynamoRIO_RPATH ${old_rpath})
-# drfrontendlib depends on drinjectlib, DR-i#1409 should be the solution
-target_link_libraries(symquery drinjectlib drfrontendlib)
-if (WIN32)
-  set_target_properties(symquery PROPERTIES VERSION ${TOOL_VERSION_NUMBER}
-    COMPILE_DEFINITIONS
-    # We need full defines to get version values for resources
-    "${DEFINES_NO_D};RC_IS_SYMQUERY")
-else (WIN32)
-  DynamoRIO_add_rel_rpaths(symquery drinjectlib)
-endif (WIN32)
-
-# should go into a configure.h if we get enough of these
-set(script_aux "")
-if (PERL_TO_EXE)
-  foreach (pl ${scripts})
-    get_filename_component(base ${pl} NAME_WE)
-    if ("${pl}" MATCHES "${toolname}.pl")
-      set(EXE_DEST "${PROJECT_BINARY_DIR}/${BUILD_BIN_PREFIX}")
-      set(script_main ${EXE_DEST}/${base}.exe)
-    else ()
-      set(EXE_DEST "${PROJECT_BINARY_DIR}/${BUILD_BIN}")
-      set(script_aux ${script_aux} ${EXE_DEST}/${base}.exe)
-    endif ()
-    add_custom_target(${base}_exe ALL DEPENDS ${EXE_DEST}/${base}.exe)
-    add_custom_command(
-      OUTPUT ${EXE_DEST}/${base}.exe
-      DEPENDS ${PROJECT_SOURCE_DIR}/${tooldir}/${pl}
-      COMMAND ${PERL_EXECUTABLE}
-      # If do glob() w/ spaces in path, need Text::ParseWords, but pp
-      # doesn't find it as a dependence automatically.
-      # FIXME: use --gui?
-      ARGS ${PERL_PP} -M Text::ParseWords -o ${EXE_DEST}/${base}.exe
-        ${PROJECT_SOURCE_DIR}/${tooldir}/${pl} ${options_for_perl}
-      VERBATIM)
-  endforeach (pl)
-endif (PERL_TO_EXE)
-
-# support running out of build dir
-file(MAKE_DIRECTORY "${PROJECT_BINARY_DIR}/logs")
-file(MAKE_DIRECTORY "${PROJECT_BINARY_DIR}/logs/codecache")
-file(MAKE_DIRECTORY "${PROJECT_BINARY_DIR}/logs/dynamorio")
-file(WRITE "${PROJECT_BINARY_DIR}/logs/README" "Directory for logs") # for adb push
-copy_file_to_device("${PROJECT_BINARY_DIR}/logs")
-if (NOT PERL_TO_EXE AND NOT USE_DRSYMS)
-  configure_file("${CMAKE_CURRENT_SOURCE_DIR}/${tooldir}/${toolname}.pl"
-    "${PROJECT_BINARY_DIR}/${BUILD_BIN}/${toolname}.pl" @ONLY)
-  if (NOT USE_DRSYMS)
-    configure_file("${CMAKE_CURRENT_SOURCE_DIR}/${tooldir}/postprocess.pl"
-      "${PROJECT_BINARY_DIR}/${BUILD_BIN}/postprocess.pl" COPYONLY)
-    set(script_aux "${CMAKE_CURRENT_SOURCE_DIR}/${tooldir}/postprocess.pl")
-  endif ()
-  set(script_main "${PROJECT_BINARY_DIR}/${BUILD_BIN}/${toolname}.pl"
-    "${options_for_perl}")
-endif ()
-if (WIN32)
-  # copy for winsyms and symquery
-  configure_file("${DBGHELP_DLL}"
-    "${PROJECT_BINARY_DIR}/${BUILD_BIN}/dbghelp.dll" COPYONLY)
-  # Copy symsrv.dll so we can fetch files from the frontend.
-  configure_file("${SYMSRV_DLL}"
-    "${PROJECT_BINARY_DIR}/${BUILD_BIN}/symsrv.dll" COPYONLY)
-  # Create symsrv.yes to avoid the EULA dialog.
-  file(WRITE "${PROJECT_BINARY_DIR}/${BUILD_BIN}/symsrv.yes" "")
-  if (USER_SPECIFIED_DynamoRIO_DIR)
-    # already built so we can copy at config time
-    configure_file("${DynamoRIO_DIR}/../${LIB_ARCH}/drconfiglib.dll"
-      "${PROJECT_BINARY_DIR}/${BUILD_BIN}/drconfiglib.dll" COPYONLY)
-    configure_file("${DynamoRIO_DIR}/../${LIB_ARCH}/drinjectlib.dll"
-      "${PROJECT_BINARY_DIR}/${BUILD_BIN}/drinjectlib.dll" COPYONLY)
-    if (USE_DRSYMS)
-      configure_file("${DynamoRIO_DIR}/../${BIN_ARCH}/drconfig.exe"
-        "${PROJECT_BINARY_DIR}/${BUILD_BIN}/drconfig.exe" COPYONLY)
-      if (NOT STATIC_DRSYMS AND TOOL_DR_MEMORY)
-        # symquery needs drsyms.dll in same dir
-        configure_file("${DynamoRIO_DIR}/../ext/${LIB_ARCH}/${build_type}/drsyms.dll"
-          "${PROJECT_BINARY_DIR}/${BUILD_BIN}/drsyms.dll" COPYONLY)
-      endif (NOT STATIC_DRSYMS AND TOOL_DR_MEMORY)
-      # symquery needs dynamorio.dll in same dir
-      # frontend now imports from DR (i#885)
-      configure_file("${DynamoRIO_DIR}/../${LIB_ARCH}/${build_type}/dynamorio.dll"
-        "${PROJECT_BINARY_DIR}/${BUILD_BIN}/dynamorio.dll" COPYONLY)
-    endif (USE_DRSYMS)
-  else (USER_SPECIFIED_DynamoRIO_DIR)
-    # XXX: I can't get "TARGET drconfiglib POST_BUILD" to work, maybe b/c
-    # the target is in a subdir?
-    set(drconfiglib_copy "${PROJECT_BINARY_DIR}/${BUILD_BIN}/drconfiglib.dll")
-    add_custom_target(drconfiglib_copy_tgt ALL DEPENDS "${drconfiglib_copy}")
-    add_custom_command(OUTPUT "${drconfiglib_copy}" DEPENDS drconfiglib
-      COMMAND ${CMAKE_COMMAND}
-      ARGS -E copy "${DynamoRIO_DIR}/../${LIB_ARCH}/drconfiglib.dll"
-      "${drconfiglib_copy}" VERBATIM)
-    set(drinjectlib_copy "${PROJECT_BINARY_DIR}/${BUILD_BIN}/drinjectlib.dll")
-    add_custom_target(drinjectlib_copy_tgt ALL DEPENDS "${drinjectlib_copy}")
-    add_custom_command(OUTPUT "${drinjectlib_copy}" DEPENDS drinjectlib
-      COMMAND ${CMAKE_COMMAND}
-      ARGS -E copy "${DynamoRIO_DIR}/../${LIB_ARCH}/drinjectlib.dll"
-      "${drinjectlib_copy}" VERBATIM)
-    if (USE_DRSYMS)
-      set(drconfigexe_copy "${PROJECT_BINARY_DIR}/${BUILD_BIN}/drconfig.exe")
-      add_custom_target(drconfigexe_copy_tgt ALL DEPENDS "${drconfigexe_copy}")
-      add_custom_command(OUTPUT "${drconfigexe_copy}" DEPENDS drconfig
-        COMMAND ${CMAKE_COMMAND}
-        ARGS -E copy "${DynamoRIO_DIR}/../${BIN_ARCH}/drconfig.exe"
-        "${drconfigexe_copy}" VERBATIM)
-      if (NOT STATIC_DRSYMS AND TOOL_DR_MEMORY)
-        # symquery needs drsyms.dll in same dir
-        set(drsymsdll_copy "${PROJECT_BINARY_DIR}/${BUILD_BIN}/drsyms.dll")
-        add_custom_target(drsymsdll_copy_tgt ALL DEPENDS "${drsymsdll_copy}")
-        add_custom_command(OUTPUT "${drsymsdll_copy}" DEPENDS drsyms
-          COMMAND ${CMAKE_COMMAND}
-          ARGS -E copy "${DynamoRIO_DIR}/../ext/${LIB_ARCH}/${build_type}/drsyms.dll"
-        "${drsymsdll_copy}" VERBATIM)
-      endif (NOT STATIC_DRSYMS AND TOOL_DR_MEMORY)
-      # symquery needs dynamorio.dll in same dir
-      # frontend now imports from DR (i#885)
-      set(drdll_copy "${PROJECT_BINARY_DIR}/${BUILD_BIN}/dynamorio.dll")
-      add_custom_target(drdll_copy_tgt ALL DEPENDS "${drdll_copy}")
-      add_custom_command(OUTPUT "${drdll_copy}" DEPENDS dynamorio
-        COMMAND ${CMAKE_COMMAND}
-        ARGS -E copy "${DynamoRIO_DIR}/../${LIB_ARCH}/${build_type}/dynamorio.dll"
-        "${drdll_copy}" VERBATIM)
-    endif (USE_DRSYMS)
-  endif (USER_SPECIFIED_DynamoRIO_DIR)
-  if (USE_DRSYMS)
-    # above copy is for winsyms and symquery, this is for drmemorylib
-    configure_file("${DBGHELP_DLL}"
-      "${PROJECT_BINARY_DIR}/${BUILD_LIB}/dbghelp.dll" COPYONLY)
-    # We don't need to copy symsrv.dll because only the frontend uses it.
-  endif (USE_DRSYMS)
-else (WIN32)
-  if (USER_SPECIFIED_DynamoRIO_DIR)
-    # already built so we can copy at config time
-    configure_file("${DynamoRIO_DIR}/../${BIN_ARCH}/drconfig"
-      "${PROJECT_BINARY_DIR}/${BUILD_BIN}/drconfig" COPYONLY)
-  else (USER_SPECIFIED_DynamoRIO_DIR)
-    set(drconfig_copy "${PROJECT_BINARY_DIR}/${BUILD_BIN}/drconfig")
-    add_custom_target(drconfig_copy_tgt ALL DEPENDS "${drconfig_copy}")
-    add_custom_command(OUTPUT "${drconfig_copy}"
-      DEPENDS drconfig
-      COMMAND ${CMAKE_COMMAND}
-      ARGS -E copy "${DynamoRIO_DIR}/../${BIN_ARCH}/drconfig"
-      "${drconfig_copy}" VERBATIM)
-  endif (USER_SPECIFIED_DynamoRIO_DIR)
-  if (TOOL_DR_MEMORY)
-    configure_file("${CMAKE_CURRENT_SOURCE_DIR}/tools/valgrind2drmemory.pl"
-      "${PROJECT_BINARY_DIR}/${BUILD_BIN}/valgrind2drmemory.pl" COPYONLY)
-  endif (TOOL_DR_MEMORY)
-endif (WIN32)
-if (TOOL_DR_HEAPSTAT)
-  # we need a copy of Dr. Memory's postprocess for leaks (PR 536878)
-  if (PERL_TO_EXE)
-    message(FATAL_ERROR "perl2exe for Dr. Heapstat not supported")
-  endif (PERL_TO_EXE)
-  configure_file("${CMAKE_CURRENT_SOURCE_DIR}/drmemory/postprocess.pl"
-    "${PROJECT_BINARY_DIR}/${BUILD_BIN}/postleaks.pl" COPYONLY)
-  set(script_aux ${script_aux} "${PROJECT_BINARY_DIR}/${BUILD_BIN}/postleaks.pl")
-endif (TOOL_DR_HEAPSTAT)
-
-
-
-###########################################################################
-# Tests
-
-# We need to add_subdirectory after we know where ntdll_imports.lib is.
-# That means we've messed with global things like include dirs already,
-# for configure_DynamoRIO_client(), but having the extension include
-# dirs in there should be harmless to the tests.
 if (BUILD_TOOL_TESTS)
+  message(STATUS "building tests")
+  
   enable_testing()
-  add_subdirectory(tests)
-endif (BUILD_TOOL_TESTS)
+  
+  get_target_path_for_execution(drltrace_path drltrace)
+  prefix_cmd_if_necessary(drltrace_path OFF ${drltrace_path})
+  add_test(drltrace ${drltrace_path} -- ${app_path})
+  add_test(drltrace_libcalls ${drltrace_path} -logdir - -print_ret_addr -- ${app_path})
+  add_test(drltrace_symargs ${drltrace_path} -logdir - -num_max_args 4 -- ${app_path})
 
-###########################################################################
-# Create tool config files for running with "drrun -t"
+  add_test(drltrace_libargs ${drltrace_path} -logdir - -only_from_app -- ${app_path})
 
-set(DRRUN_DIR "${PROJECT_BINARY_DIR}/drrun")
-file(MAKE_DIRECTORY "${DRRUN_DIR}")
+  #regex strings for libcalls and arguments printing test
+  set(libcall_ret "    and return to module id:([0-9]+), offset:0x([0-9a-f]+)\n")
 
-if (X64)
-  set(BIT_SFX "64")
-else ()
-  set(BIT_SFX "32")
-endif ()
-set(DRRUN_SFX ".drrun${BIT_SFX}")
-if (BUILDING_SUB_PACKAGE)
-  set(DRRUN_INSTALL "tools/")
-else ()
-  set(DRRUN_INSTALL "${DR_install_dir}/tools/")
-endif ()
-
-function (create_drrun_file frontend file_out name) # option list follows name
-  get_target_property(frontend_path ${frontend} LOCATION${location_suffix})
-  get_filename_component(frontend_name ${frontend_path} NAME)
-  if (ANDROID AND TOOL_DR_MEMORY)
-    set(frontend_name ${toolname}) # point at script, not launcher
-  endif ()
-  if (BUILDING_SUB_PACKAGE)
-    set(DRRUN_TOP "FRONTEND_REL=${INSTALL_PREFIX}/${BUILD_BIN}/${frontend_name}")
-  else ()
-    set(DRRUN_TOP "FRONTEND_REL=../${BUILD_BIN}/${frontend_name}")
-  endif ()
-  set(DRRUN_FILE "${DRRUN_DIR}/${name}${DRRUN_SFX}")
-  file(WRITE  ${DRRUN_FILE} "# Dr. Memory tool config file\n")
-  file(APPEND ${DRRUN_FILE} "${DRRUN_TOP}\n")
-  file(APPEND ${DRRUN_FILE} "TOOL_OP=-dr\n")
-  file(APPEND ${DRRUN_FILE} "TOOL_OP_DR_PATH\n")
-  file(APPEND ${DRRUN_FILE} "TOOL_OP_DR_BUNDLE=-dr_ops\n")
-  foreach (op ${ARGN})
-    file(APPEND ${DRRUN_FILE} "TOOL_OP=${op}\n")
-  endforeach ()
-  if (X64)
-    file(APPEND ${DRRUN_FILE}
-      "USER_NOTICE=Support for 64-bit applications under this tool is experimental.  Please report issues to http://drmemory.org/issues.\n")
-  endif ()
-  install(FILES "${DRRUN_FILE}" DESTINATION "${DRRUN_INSTALL}/")
-  set(${file_out} ${DRRUN_FILE} PARENT_SCOPE)
-
-  # DRi#1509: generate a list of tools for drrun usage messages
-  if (NOT DEBUG_BUILD) # avoid dups
-    install(CODE "file(APPEND \"\${CMAKE_INSTALL_PREFIX}/tools/list${BIT_SFX}\" \"${name}\\n\")")
-  endif ()
-endfunction (create_drrun_file)
-
-create_drrun_file(${toolname} unused "drmemory")
-if (NOT X64)
-  create_drrun_file(${toolname} unused "drmemory_light" "-light")
-endif ()
 if (WIN32)
-  create_drrun_file(${toolname} unused "handle_leaks" "-handle_leaks_only")
-endif ()
+  set(libcall_args1_01 "    arg 0: 0x([0-9a-f]+) => 0x([0-9a-f]+) \\(type=void\\*, size=0x([0-9a-f]+)\\)\n")
+  set(libcall_args1_02 "    arg 2: 0x([0-9a-f]+) \\(type=size_t, size=0x([0-9a-f]+)\\)\n")
 
-###########################################################################
-# Dr. Memory Framework (DRMF)
+  set(libcall_args2_0 "    arg 0: 0x([0-9a-f]+) \\(type=HANDLE, size=0x([0-9a-f]+)\\)\n")
+  set(libcall_args2_1 "    arg 1: 0x([0-9a-f]+) \\(type=int, size=0x([0-9a-f]+)\\)\n")
 
-# We decided against putting the extension inside frameworks/, so
-# framework-shared code goes here.  Things that should be global we
-# put into functions for invocation inside extension subdirs.
+  set(libcall_name1 "~~([0-9a-f]+)~~ KERNELBASE.dll!VirtualQuery\n")
+  set(libcall_name2 "~~([0-9a-f]+)~~ ntdll.dll!ZwQueryInformationProcess\n")
+  set(libcall_printf "arg 0: done\n \\(type=char\\*, size=0x([0-9a-f]+)\\)\n")
+  # some machines use WriteFile instead of printf, trying to handle both
+  set(libcall_WriteFile "arg 2: 0x([0-9a-f]+) \\(type=DWORD, size=0x([0-9a-f]+)\\)\n")
+  set(libcall_both_variants "${libcall_printf}\;${libcall_WriteFile}")
+else ()
+  set(libcall_both_variants "    arg 0: done \\(type=char\\*, size=0x([0-9a-f]+)\\)\n")
+  set(libcall_args1_01 ${libcall_both_variants})
 
-set(DRMF_BASEDIR "drmf")
-set(DRMF_BINBASE "${LIB_ARCH}/${build_type}")
-set(DRMF_INSTALL "${INSTALL_PREFIX}${DRMF_BASEDIR}")
-set(DRMF_INSTALL_BIN "${DRMF_INSTALL}/${DRMF_BINBASE}")
-set(DRMF_INSTALL_INC "${DRMF_INSTALL}/include")
-set(framework_dir "${PROJECT_BINARY_DIR}/${DRMF_BASEDIR}")
-set(framework_incdir "${framework_dir}/include")
-set(framework_bindir "${framework_dir}/${DRMF_BINBASE}")
+  set(libcall_args2_0 "    arg 0: /dev/null \\(type=char \\*\\*, size=0x([0-9a-f]+)\\)\n")
+  set(libcall_args2_1 "    arg 1: 0x([0-9a-f]+) \\(type=<unknown>\\*, size=0x([0-9a-f]+)\\)\n")
 
-# Versioning: we use separate versioning for DRMF from the tool versioning.
-# This is major*100 + minor.
-set(DRMF_VERSION_DEFAULT "1.0.${VERSION_NUMBER_PATCHLEVEL}")
-set(DRMF_VERSION "" CACHE STRING "DRMF version number: leave empty for default")
-if ("${DRMF_VERSION}" STREQUAL "")
-  set(DRMF_VERSION ${DRMF_VERSION_DEFAULT})
-endif()
-message(STATUS "DRMF version number: ${DRMF_VERSION}")
-string(REGEX REPLACE "^([0-9]+)\\..*" "\\1" DRMF_VERSION_MAJOR "${DRMF_VERSION}")
-string(REGEX REPLACE "^[0-9]+\\.([0-9]+)\\..*" "\\1" DRMF_VERSION_MINOR "${DRMF_VERSION}")
-# We use just major.minor for .so versioning (and no, SOVERSION is not sufficient
-# here: we have to set VERSION to control the file name and import dependence).
-string(REGEX REPLACE "^([0-9]+\\.[0-9]+)\\..*" "\\1"
-  DRMF_VERSION_MAJOR_MINOR "${DRMF_VERSION}")
-math(EXPR DRMF_VERSION_INTEGER "${DRMF_VERSION_MAJOR}*100 + ${DRMF_VERSION_MINOR}")
-set(DRMF_VERSION_COMPAT 9)                # Oldest compatible version
-set(DRMF_VERSION_CUR ${DRMF_VERSION_INTEGER}) # Current version
-
-configure_file(framework/public.h
-  ${framework_incdir}/drmemory_framework.h)
-include_directories(${framework_incdir})
-
-configure_file(framework/drmf.cmake.in
-  ${framework_dir}/DrMemoryFrameworkConfig.cmake
-  @ONLY)
-foreach (ext drsyscall)
-  file(APPEND ${framework_dir}/DrMemoryFrameworkConfig.cmake "
-set(DynamoRIO_EXT_${ext}_INC \${drmf_cwd}/include)
-")
-endforeach (ext)
-configure_file(framework/drmf_version.cmake.in
-  ${framework_dir}/DrMemoryFrameworkConfigVersion.cmake
-  @ONLY)
-
-# Export extensions for importing by clients.
-if (X64)
-  set(exported_targets_name "DRMFTarget64")
-else (X64)
-  set(exported_targets_name "DRMFTarget32")
-endif (X64)
-
-# DRi#948: we need to map Release and RelMinSize to RelWithDebInfo
-file(WRITE ${framework_dir}/${exported_targets_name}.cmake "")
-set(exported_targets_append "")
-macro(export_target)
-  if ("${CMAKE_VERSION}" VERSION_EQUAL "3.0" OR
-      "${CMAKE_VERSION}" VERSION_GREATER "3.0")
-    set(tgt_args "")
-  else ()
-    # We use a prefix primarily to make it easy to test the imported targets,
-    # and to give a better "bundled extensions" feel.
-    set(tgt_args NAMESPACE drmf_)
-  endif ()
-  export(TARGETS ${ARGV} ${tgt_args} FILE ${framework_dir}/${exported_targets_name}.cmake
-    APPEND)
-  set(toadd "
-SET_PROPERTY(TARGET ${ARGV0} PROPERTY MAP_IMPORTED_CONFIG_RELEASE RelWithDebInfo)
-SET_PROPERTY(TARGET ${ARGV0} PROPERTY MAP_IMPORTED_CONFIG_RELMINSIZE RelWithDebInfo)
-")
-  if (NOT DEBUG_BUILD)
-    file(APPEND ${framework_dir}/${exported_targets_name}.cmake ${toadd})
-  endif (NOT DEBUG_BUILD)
-  # For install we want both debug and release:
-  set(exported_targets_append "${exported_targets_append}${toadd}")
-  set(exported_targets_append "${exported_targets_append}" PARENT_SCOPE)
-endmacro(export_target)
-
-# Included prior to add_subdirectory() for building version.c which
-# includes utils.h which includes drsyscall.h.
-include_directories(drsyscall)
-
-add_subdirectory(drsyscall)
-
-# XXX: change this and include_directories above to
-# find_package() + use_DynamoRIO_extension(drsyscall)
-#target_link_libraries(${client_target} drsyscall_int)
-
-if (BUILD_TOOL_TESTS)
-  add_subdirectory(tests/framework)
-
-  if (TOOL_DR_MEMORY)
-    # unit tests
-    add_executable(unit_tests ${srcs})
-    set_property(TARGET unit_tests PROPERTY COMPILE_DEFINITIONS
-      "${DEFINES_NO_D};BUILD_UNIT_TESTS;RC_IS_UNITTESTS")
-    if ("${CMAKE_GENERATOR}" MATCHES "Visual Studio")
-      # ensure race-free parallel builds
-      add_dependencies(unit_tests ${asm_utils_tgt})
-    endif ("${CMAKE_GENERATOR}" MATCHES "Visual Studio")
-    if (DEFINED DynamoRIO_RPATH)
-      set(old_rpath ${DynamoRIO_RPATH})
-    else ()
-      set(old_rpath OFF)
-    endif ()
-    set(DynamoRIO_RPATH ON)
-    configure_DynamoRIO_standalone(unit_tests)
-    use_DynamoRIO_extension(unit_tests drmgr_static)
-    use_DynamoRIO_extension(unit_tests drcontainers)
-    use_DynamoRIO_extension(unit_tests drmgr_static)
-    use_DynamoRIO_extension(unit_tests drx_static)
-    use_DynamoRIO_extension(unit_tests drutil_static)
-    use_DynamoRIO_extension(unit_tests drwrap_static)
-    use_DynamoRIO_extension(unit_tests drsyms_static)
-    use_DynamoRIO_extension(unit_tests drcovlib_static)
-    target_link_libraries(unit_tests drsyscall_int)
-    set(DynamoRIO_RPATH ${old_rpath})
-    get_target_path_for_execution(unit_relpath unit_tests)
-    prefix_cmd_if_necessary(unit_relpath OFF ${unit_relpath})
-    if (NOT ANDROID) # FIXME i#: not working on Android
-      add_test(unit_tests ${unit_relpath})
-    endif ()
-    copy_target_to_device(unit_tests)
-  endif (TOOL_DR_MEMORY)
-
+  set(libcall_name1 "~~([0-9a-f]+)~~ libc.so.6!puts\n")
+  set(libcall_name2 "~~([0-9a-f]+)~~ libc.so.6!open\n")
+endif(WIN32)
+  set_tests_properties(drltrace_libcalls PROPERTIES PASS_REGULAR_EXPRESSION
+                       ${libcall_name1}${libcall_args1_01}${libcall_args1_02}${libcall_ret})
+  set_tests_properties(drltrace_symargs PROPERTIES PASS_REGULAR_EXPRESSION
+                       ${libcall_name2}${libcall_args2_0}${libcall_args2_1})
+  set_tests_properties(drltrace_libargs PROPERTIES PASS_REGULAR_EXPRESSION
+                       ${libcall_both_variants})
 endif (BUILD_TOOL_TESTS)
-
-# FIXME i#1987: enable support of drltrace under MacOS
-if (NOT APPLE)
-  add_subdirectory(drltrace)
-endif()
-
-#add_subdirectory(framework/samples)

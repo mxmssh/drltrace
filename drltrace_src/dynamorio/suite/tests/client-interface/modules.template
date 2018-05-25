@@ -1,8 +1,0 @@
-#ifdef WINDOWS
-LOADED MODULE: COMDLG32.dll
-UNLOADED MODULE: COMDLG32.dll
-#else
-LOADED MODULE: libclient.modules.appdll.so
-UNLOADED MODULE: libclient.modules.appdll.so
-#endif
-all done

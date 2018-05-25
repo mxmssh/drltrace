@@ -1,5 +1,0 @@
-// some number of these after dr_init but before app installs its itimer
-(client event_timer fired
-)+(app got SIGALRM
-)+(client event_timer fired
-)+.*
