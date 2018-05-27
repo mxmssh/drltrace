@@ -39,24 +39,11 @@
  */
 #include "drltrace.h"
 
-/* XXX i#1948: features to add:
+/* XXX: features to add:
  *
- * + Add filtering of which library routines to trace.
+ * + Add filtering of which library routines or concrete routine to trace.
  *   This would likely be via a configuration file.
  *   Currently we have a simple -only_to_lib option.
- *
- * + Add argument values and return values.  The number and type of each
- *   argument and return would likely come from the filter configuration
- *   file, or from querying debug information.
- *   Today we have simple type-blind printing via -num_unknown_args and
- *   usage of drsyscall to print symbolic arguments for known library calls.
- *
- * + Add 2 more modes, both gathering statistics rather than a full
- *   trace: one mode that counts total calls, and one that just
- *   records whether each library routine was ever called.  For these,
- *   we'll probably want to insert custom instrumentation rather than
- *   a clean call via drwrap, and so we'll want our own hashtable of
- *   the library entries.
  */
 
 /* Where to write the trace */
@@ -69,9 +56,6 @@ static app_pc exe_start;
  * Arguments printing
  */
 
-/* XXX i#1978: The functions print_simple_value and print_arg were taken from drstrace.
- * It would be better to move them in drsyscall and import in drstrace and here.
- */
 static void
 print_simple_value(drltrace_arg_t *arg, bool leading_zeroes)
 {

@@ -136,14 +136,14 @@ config_parse_type(std::string type_name, uint index)
     type_name.erase(std::remove(type_name.begin(), type_name.end(), '\n'),
                     type_name.end());
 
-    /* FIXME i#1948: Currently, we have only few cross-platform libcalls in the config
-     * file which is possible to use both for Windows and Linux. However, we
-     * need to separate them into two configs and fix CMAKE accordingly.
+    /* FIXME Drmemory i#1948: Currently, we have only few cross-platform libcalls
+     * in the config file which is possible to use both for Windows and Linux.
+     * However, we need to separate them into two configs and fix CMAKE accordingly.
      * Moreover, we have to provide two different interfaces for type parsing
      * in Windows and Linux.
      */
 
-    /* XXX i#1948: We have to extend a list of supported types here. */
+    /* XXX DrMemory i#1948: We have to extend a list of supported types here. */
     if (type_name.compare("VOID") == 0) {
         arg->type_name = "void";
         arg->type = DRSYS_TYPE_VOID;
@@ -259,7 +259,7 @@ parse_line(const char *line, int line_num)
     std::vector<drltrace_arg_t *> *args_vector = new std::vector<drltrace_arg_t *>();
     std::vector<std::string>::iterator it;
     for (it = tokens.begin(); it != tokens.end(); ++it) {
-        /* FIXME i#1948: Currently, we don't support ret value printing and
+        /* FIXME DrMemory i#1948: Currently, we don't support ret value printing and
          * skipping it here.
          */
         if (elem_index >= 2) {

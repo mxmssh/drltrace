@@ -1,4 +1,5 @@
 # **********************************************************
+# Copyright (c) 2018 Maksim Shudrak. All rights reserved.
 # Copyright (c) 2010-2017 Google, Inc.    All rights reserved.
 # Copyright (c) 2009-2010 VMware, Inc.    All rights reserved.
 # **********************************************************
@@ -66,7 +67,7 @@ if ("${CMAKE_GENERATOR}" MATCHES "Visual Studio")
   if (DEBUG OR "${CMAKE_BUILD_TYPE}" MATCHES "Debug")
     set(CMAKE_CONFIGURATION_TYPES "Debug" CACHE STRING "" FORCE)
   else ()
-    # Go w/ debug info (i#1392)
+    # Go w/ debug info (DRMemory i#1392)
     set(CMAKE_CONFIGURATION_TYPES "RelWithDebInfo" CACHE STRING "" FORCE)
   endif ()
   # we want to use the _LOCATION_<config> property
@@ -80,14 +81,33 @@ project(drltrace)
 
 if ("${CMAKE_VERSION}" VERSION_EQUAL "3.0" OR
     "${CMAKE_VERSION}" VERSION_GREATER "3.0")
-  # XXX i#1557: update our code to satisfy the changes in 3.x
+  # XXX DrMemory i#1557: update our code to satisfy the changes in 3.x
   cmake_policy(SET CMP0026 OLD)
-  # XXX i#1375: if we make 2.8.12 the minimum we can remove the @rpath
+  # XXX DrMemory i#1375: if we make 2.8.12 the minimum we can remove the @rpath
   # Mac stuff and this policy, right?
   cmake_policy(SET CMP0042 OLD)
 endif ()
 
-set(output_dir "${PROJECT_BINARY_DIR}/bin")
+# setup everything to be able to run drltrace
+
+if (CMAKE_C_SIZEOF_DATA_PTR EQUAL 8 OR CMAKE_CXX_SIZEOF_DATA_PTR EQUAL 8)
+  set(X64 ON)
+  set(LIB_ARCH "lib64")
+  set(BIN_ARCH "bin64")
+  set(DEFINES ${DEFINES} -DX64)
+else()
+  set(X64 OFF)
+  set(LIB_ARCH "lib32")
+  set(BIN_ARCH "bin")
+endif ()
+
+if ("${CMAKE_BUILD_TYPE}" MATCHES "Debug")
+    set(build_type "debug")
+else()
+    set(build_type "release")
+endif()
+
+set(output_dir "${PROJECT_BINARY_DIR}/${BIN_ARCH}")
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${output_dir}")
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}")
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${output_dir}")
@@ -120,7 +140,7 @@ if (NOT DEFINED GENERATE_PDBS)
   set(GENERATE_PDBS ON)
 endif (NOT DEFINED GENERATE_PDBS)
 
-# i#379: We usually want to build the samples with optimizations to improve the
+# DrMemory i#379: We usually want to build the samples with optimizations to improve the
 # chances of inlining, but it's nice to be able to turn that off easily.  A
 # release build should already have optimizations, so this should only really
 # affect debug builds.
@@ -160,7 +180,7 @@ else ()
   set(DO_DR_INSTALL OFF)
   set(DO_DR_INSTALL_TARGETS ON)
   # Stick the binaries somewhere outside of the install dir.
-  # However, NSIS won't allow an absolute path (i#1099).
+  # However, NSIS won't allow an absolute path (DrMemory i#1099).
   # So for an automated package.cmake build via cpack, we use .. which
   # is fine in the package dir structure.  We don't want .. for a
   # user-specified destination of course.  We simply don't
@@ -170,7 +190,7 @@ else ()
   else ()
     set(DR_INSTALL_TARGETS_DEST ${PROJECT_BINARY_DIR}/dynamorio/installs)
   endif ()
-  # i#1449: we need cmake to remove the absolute path from the LC_LOAD_DYLIB
+  # DrMemory i#1449: we need cmake to remove the absolute path from the LC_LOAD_DYLIB
   # entries, which only happens on install.  We can't easily do a two-step
   # install b/c subdirs go after the main dir -- so we have DR cooperation.
   set(DR_INSTALL_DEPLOY_BIN_DEST ${DR_install_dir}/${BIN_ARCH})
@@ -239,10 +259,6 @@ set(srcs
     drltrace_options.cpp
     drltrace_utils.cpp)
 
-#if (WIN32)
-#  set(srcs ${srcs} ${PROJECT_SOURCE_DIR}/make/resources.rc)
-#endif ()
-
 set(DynamoRIO_USE_LIBC OFF)
 
 set(TOOLNAME "drltrace")
@@ -272,7 +288,7 @@ use_DynamoRIO_extension(drltracelib drx_static)
 use_DynamoRIO_extension(drltracelib drcovlib_static)
 use_DynamoRIO_extension(drltracelib droption)
 
-# XXX i#2429: DR's droption.h includes both <string.h> and <string.h>
+# XXX DrMemory i#2429: DR's droption.h includes both <string.h> and <string.h>
 # we should remove <string.h> and replace the strcmp comparison with
 # a std::string. Then we can remove special if here and below.
 if (UNIX)
@@ -280,28 +296,9 @@ if (UNIX)
   append_property_string(TARGET drltracelib COMPILE_FLAGS "-DNOLINK_STRCASESTR")
 endif()
 if ("${CMAKE_GENERATOR}" MATCHES "Visual Studio")
-  # i#1805: see comment in drstrace/CMakeLists.txt
+  # DrMemory i#1805: see comment in drstrace/CMakeLists.txt
   append_property_string(TARGET drltracelib LINK_FLAGS "/force:multiple")
 endif ()
-
-# setup everything to be able to run drltrace
-
-if (CMAKE_C_SIZEOF_DATA_PTR EQUAL 8 OR CMAKE_CXX_SIZEOF_DATA_PTR EQUAL 8)
-  set(X64 ON)
-  set(LIB_ARCH "lib64")
-  set(BIN_ARCH "bin64")
-  set(DEFINES ${DEFINES} -DX64)
-else()
-  set(X64 OFF)
-  set(LIB_ARCH "lib32")
-  set(BIN_ARCH "bin32")
-endif ()
-
-if ("${CMAKE_BUILD_TYPE}" MATCHES "Debug")
-    set(build_type "debug")
-else()
-    set(build_type "release")
-endif()
 
 if (WIN32)
   if (USER_SPECIFIED_DynamoRIO_DIR)
@@ -367,28 +364,23 @@ if (UNIX)
   append_property_string(TARGET drltrace COMPILE_FLAGS "-DNOLINK_STRCASESTR")
 endif()
 
-#install(TARGETS drltrace DESTINATION "${INSTALL_BIN}"
-#  PERMISSIONS ${owner_access} OWNER_EXECUTE GROUP_READ GROUP_EXECUTE
-#  WORLD_READ WORLD_EXECUTE)
-#copy_target_to_device(drltrace)
-#copy_and_adjust_drpaths(${CMAKE_RUNTIME_OUTPUT_DIRECTORY} drltrace)
-
 ##################################################
 # drltrace config
 
-set(conf_out ${PROJECT_BINARY_DIR}/${BUILD_BIN}/drltrace.config)
+set(conf_out ${PROJECT_BINARY_DIR}/${BIN_ARCH}/drltrace.config)
 if (WIN32)
   configure_file(${CMAKE_CURRENT_SOURCE_DIR}/drltrace_win.config ${conf_out} COPYONLY)
 else ()
   configure_file(${CMAKE_CURRENT_SOURCE_DIR}/drltrace_linux.config ${conf_out} COPYONLY)
 endif ()
 
-#install(FILES ${conf_out} DESTINATION "${INSTALL_BIN}" PERMISSIONS ${owner_access}
-#        GROUP_READ WORLD_READ)
-#copy_target_to_device(${conf_out})
-
 ##################################################
 # drltrace tests
+
+function(tobuild name source)
+  set(srcs ${source})
+  add_executable(${name} ${srcs})
+endfunction(tobuild)
 
 function (get_target_path_for_execution out target)
   if (ANDROID)
@@ -404,15 +396,18 @@ function (prefix_cmd_if_necessary cmd_out use_ats cmd_in)
   set(${cmd_out} ${local} PARENT_SCOPE)
 endfunction (prefix_cmd_if_necessary)
 
-# XXX i#1960: add more tests for drltrace that check the output contains
+# XXX DrMemory i#1960: add more tests for drltrace that check the output contains
 # expected library calls.
 #
 if (BUILD_TOOL_TESTS)
   message(STATUS "building tests")
-  
   enable_testing()
-  
+
+  tobuild(drltrace_app drsyscall_app.c)
+
   get_target_path_for_execution(drltrace_path drltrace)
+  get_target_path_for_execution(app_path drltrace_app)
+
   prefix_cmd_if_necessary(drltrace_path OFF ${drltrace_path})
   add_test(drltrace ${drltrace_path} -- ${app_path})
   add_test(drltrace_libcalls ${drltrace_path} -logdir - -print_ret_addr -- ${app_path})
