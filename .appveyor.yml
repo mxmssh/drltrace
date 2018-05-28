@@ -36,6 +36,6 @@ before_build:
 
 build_script:
   #parallel: true
-  - cmake -G%GENERATOR% -DCMAKE_BUILD_TYPE=%CONFIG% ..\drltrace_src\
+  - cmake "-G%GENERATOR%" -DCMAKE_BUILD_TYPE=%CONFIG% ..\drltrace_src\
   - cmake --build . --config "%CONFIG%"
   
