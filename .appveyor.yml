@@ -27,11 +27,11 @@ environment:
 
     - GENERATOR: Visual Studio 12 Win64
       CONFIG: Debug
-      MSVC_PLATFORM: x64
+      MSVC_PLATFORM: x86_amd64
       
     - GENERATOR: Visual Studio 12 Win64
       CONFIG: RelWithDebInfo
-      MSVC_PLATFORM: amd64
+      MSVC_PLATFORM: x86_amd64
 
 before_build:
   - call "c:\Program Files (x86)\Microsoft Visual Studio 12.0\VC\vcvarsall.bat" %MSVC_PLATFORM%
