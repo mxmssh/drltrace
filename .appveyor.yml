@@ -12,29 +12,33 @@ branches:
 
 platform: x64
 
+build:
+  parallel: true 
+
 environment:
   matrix:
     - GENERATOR: Visual Studio 12
       CONFIG: Debug
+      MSVC_PLATFORM: x86
 
     - GENERATOR: Visual Studio 12
-      CONFIG: Release
+      CONFIG: RelWithDebInfo
+      MSVC_PLATFORM: x86
 
     - GENERATOR: Visual Studio 12 Win64
       CONFIG: Debug
-
+      MSVC_PLATFORM: x64
+      
     - GENERATOR: Visual Studio 12 Win64
-      CONFIG: Release
+      CONFIG: RelWithDebInfo
+      MSVC_PLATFORM: amd64
 
 before_build:
-  - call "c:\Program Files (x86)\Microsoft Visual Studio 12.0\VC\vcvarsall.bat" x86
+  - call "c:\Program Files (x86)\Microsoft Visual Studio 12.0\VC\vcvarsall.bat" %MSVC_PLATFORM%
   - cd c:\projects\drltrace
   - git submodule update --init --recursive
   - mkdir build
-  - cd build
-
-build:
-  parallel: true  
+  - cd build 
 
 build_script:
   #parallel: true
@@ -42,4 +46,4 @@ build_script:
   - cmake --build . --config "%CONFIG%"
 
 test_script:
-  - ctest -VV -C "%CONFIG%"
+  - ctest
