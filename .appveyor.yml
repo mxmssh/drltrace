@@ -26,7 +26,7 @@ before_build:
   - git submodule update --init --recursive
   - mkdir build
   - cd build
-  - cmake -G"Visual Studio 12" -DCMAKE_BUILD_TYPE=Debug ..\drltrace\drltrace_src\
+  - cmake -G"Visual Studio 12" -DCMAKE_BUILD_TYPE=Debug ..\drltrace_src\
 
 build:
   parallel: true                  # enable MSBuild parallel builds
