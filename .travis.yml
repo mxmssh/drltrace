@@ -1,0 +1,36 @@
+language:
+  - c
+  - cpp
+
+os: linux
+compiler: gcc  
+ 
+dist: trusty
+
+env:
+  - BUILD=x86_64-linux-gnu
+    CFLAGS=-m64 LDFLAGS=-m64
+  - BUILD=i686-linux-gnu
+    CFLAGS=-m32 LDFLAGS=-m32
+
+#environment: 
+# matrix: 
+#    - CONFIG: Debug64
+#      CFLAGS=-m64 LDFLAGS=-m64
+#      BUILD_OPTION: -DDEBUG=ON
+#    - CONFIG: Release64
+#      CFLAGS=-m64 LDFLAGS=-m64
+#      BUILD_OPTION: -DDEBUG=OFF
+#    - CONFIG: Debug
+#      CFLAGS=-m32 LDFLAGS=-m32
+#      BUILD_OPTION: -DDEBUG=ON
+#    - CONFIG: Release
+#      CFLAGS=-m32 LDFLAGS=-m32
+#      BUILD_OPTION: -DDEBUG=OFF
+      
+before_script: 
+  - "mkdir build"
+  - "cd build"
+  - "cmake ..\drltrace_src
+
+script: "make"
