@@ -15,7 +15,7 @@ platform: x64
 environment:
   matrix:
     #fast_finish: true     # set this flag to immediately finish build once one of the jobs fails.
-    - GENERATOR: "Visual Studio 12"
+    - GENERATOR: Visual Studio 12
       CONFIG: Debug
 
     - GENERATOR: "Visual Studio 12"
