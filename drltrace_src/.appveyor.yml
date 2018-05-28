@@ -1,0 +1,38 @@
+# AppVeyor CI configuration:
+
+# We don't do a shallow clone of just the source archive as we want to get
+# the diff for source file checks.
+# We do limit to the last few commits to speed things up:
+clone_depth: 10
+
+# Don't run on pushes to feature branches: pull requests cover those.
+branches:
+  only:
+    - master
+
+platform: x64
+
+matrix:
+  fast_finish: true     # set this flag to immediately finish build once one of the jobs fails.
+
+image: Visual Studio 2013
+
+configuration:
+  - 2013
+
+before_build:
+  - if "%configuration%"=="2013" call "c:\Program Files (x86)\Microsoft Visual Studio 12.0\VC\vcvarsall.bat" x86
+  - cd c:\projects\drltrace
+
+build_script:
+  # Unlike Travis, AppVeyor doesn't do a submodule update for us.
+  - git submodule update --init --recursive
+  - mkdir build
+  - cd build
+  - cmake -G"Visual Studio 12" -DCMAKE_BUILD_TYPE=Debug ..\drltrace\drltrace_src\
+
+build:
+  parallel: true                  # enable MSBuild parallel builds
+  project: drltrace.sln      # path to Visual Studio solution or project
+  # MSBuild verbosity level
+  verbosity: detailed
