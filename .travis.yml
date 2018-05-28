@@ -31,6 +31,6 @@ env:
 before_script: 
   - "mkdir build"
   - "cd build"
-  - cmake ../drltrace/drltrace_src
+  - cmake ../drltrace
 
 script: "make"
