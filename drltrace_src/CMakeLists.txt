@@ -393,10 +393,12 @@ endif ()
 function(tobuild name source)
   set(srcs ${source})
   add_executable(${name} ${srcs})
-    set_target_properties(
-            ${name}
-            PROPERTIES
-            COMPILE_DEFINITIONS UNIX)
+  if (UNIX)
+    set(targ_property UNIX)
+  else()
+    set(targ_property WINDOWS)
+  endif(UNIX)
+  set_target_properties(${name} PROPERTIES COMPILE_DEFINITIONS ${targ_property})
 endfunction(tobuild)
 
 function (get_target_path_for_execution out target)
