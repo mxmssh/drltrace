@@ -14,17 +14,16 @@ platform: x64
 
 environment:
   matrix:
-    #fast_finish: true     # set this flag to immediately finish build once one of the jobs fails.
     - GENERATOR: Visual Studio 12
       CONFIG: Debug
 
-    - GENERATOR: "Visual Studio 12"
+    - GENERATOR: Visual Studio 12
       CONFIG: Release
 
-    - GENERATOR: "Visual Studio 12 Win64"
+    - GENERATOR: Visual Studio 12 Win64
       CONFIG: Debug
 
-    - GENERATOR: "Visual Studio 12 Win64"
+    - GENERATOR: Visual Studio 12 Win64
       CONFIG: Release
 
 before_build:
@@ -34,8 +33,13 @@ before_build:
   - mkdir build
   - cd build
 
+build:
+  parallel: true  
+
 build_script:
   #parallel: true
   - cmake "-G%GENERATOR%" -DCMAKE_BUILD_TYPE=%CONFIG% ..\drltrace_src\
   - cmake --build . --config "%CONFIG%"
-  
+
+test_script:
+  - ctest -VV -C "%CONFIG%"
