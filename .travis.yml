@@ -29,10 +29,11 @@ env:
 #      BUILD_OPTION: -DDEBUG=OFF
       
 before_script:
+  - "ls"
   - "pwd"
-  - "cd mxmssh/drltrace/"
-  - "mkdir build"
-  - "cd build"
-  - cmake ../drltrace_src/
+  #- "cd mxmssh/drltrace/"
+  #- "mkdir build"
+  #- "cd build"
+  - cmake drltrace_src/
 
 script: "make"
