@@ -28,9 +28,11 @@ env:
 #      CFLAGS=-m32 LDFLAGS=-m32
 #      BUILD_OPTION: -DDEBUG=OFF
       
-before_script: 
+before_script:
+  - "pwd"
+  - "cd mxmssh/drltrace/"
   - "mkdir build"
   - "cd build"
-  - cmake ..
+  - cmake ../drltrace_src/
 
 script: "make"
