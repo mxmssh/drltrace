@@ -121,7 +121,7 @@ configure_application(char *app_name, char **app_argv, void **inject_data,
                       const char *config_dir)
 {
     bool is_debug = false;
-#ifdef _DEBUG
+#ifdef DEBUG
     is_debug = true;
 #endif
     int errcode;
@@ -234,11 +234,7 @@ _tmain(int argc, const TCHAR *targv[])
 #elif LINUX
     static const char *libname = "libdrltracelib.so";
 #endif
-#ifdef _DEBUG
     dr_snprintf(drlibpath, BUFFER_SIZE_ELEMENTS(drlibpath), "%s", libname);
-#else
-    dr_snprintf(drlibpath, BUFFER_SIZE_ELEMENTS(drlibpath), "%s", libname);
-#endif
     NULL_TERMINATE_BUFFER(drlibpath);
 
     void *inject_data;

@@ -59,6 +59,11 @@ function (set_output_dirs dir)
   endif ()
 endfunction (set_output_dirs)
 
+if (UNIX)
+  set(DEFINES ${DEFINES} -DUNIX)
+  set(LINUX 1)
+endif (UNIX)
+
 # To match Makefiles and have just one build type per configured build
 # dir, we collapse VS generator configs to a single choice.
 # This must be done prior to the project() command and the var
@@ -149,13 +154,15 @@ option(OPTIMIZE_SAMPLES
   ON)
 if (WIN32)
   set(OPT_CFLAGS "/O2")
+  if (DEBUG)
+    set(OPT_CFLAGS "/DDEBUG")
+  endif (DEBUG)
 else (WIN32)
   set(OPT_CFLAGS "-O2")
+  if (DEBUG)
+    set(OPT_CFLAGS "-DDEBUG")
+  endif (DEBUG)
 endif (WIN32)
-
-if (DEBUG)
-  set(OPT_CFLAGS "-DDEBUG")
-endif (DEBUG)
 
 if (DEFINED DynamoRIO_DIR)
   message(STATUS "Attempting to use pre-built DynamoRIO: ${DynamoRIO_DIR}")
@@ -251,6 +258,43 @@ endif ()
 #include(${PROJECT_SOURCE_DIR}/make/policies.cmake NO_POLICY_SCOPE)
 
 ##################################################
+# drltrace frontend
+
+set(front_srcs
+    drltrace_frontend.cpp
+    drltrace_options.cpp)
+#if (WIN32)
+#  set(front_srcs ${front_srcs} ${PROJECT_SOURCE_DIR}/make/resources.rc)
+#endif ()
+
+add_executable(drltrace ${front_srcs})
+
+#set_library_version(drltrace ${DRMF_VERSION})
+
+if (WIN32)
+  set_property(TARGET drltrace PROPERTY COMPILE_DEFINITIONS
+               ${DEFINES_NO_D} RC_IS_DRLTRACE)
+else ()
+  #set_property(TARGET drltrace PROPERTY COMPILE_DEFINITIONS ${DEFINES_NO_D})
+  # DR's boundary of 2 causes compilation error, so we stick to default.
+  # This is okay because this is a standalone app, and does not need to match
+  # DynamoRIO.
+  #string(REPLACE "-mpreferred-stack-boundary=2 " "" CMAKE_CXX_FLAGS
+         #"${CMAKE_CXX_FLAGS}")
+  #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-strict-overflow")
+endif ()
+
+# XXX: see DR's i#2429 and comment above.
+#if (UNIX)
+  # to avoid conflicts with new declaration with "C" linkage in utils.h
+  #append_property_string(TARGET drltrace COMPILE_FLAGS "-DNOLINK_STRCASESTR")
+#endif()
+
+configure_DynamoRIO_standalone(drltrace)
+
+target_link_libraries(drltrace drinjectlib drconfiglib drfrontendlib)
+
+##################################################
 # drltracelib
 
 set(srcs
@@ -334,37 +378,6 @@ if (WIN32)
 endif (WIN32)
 
 ##################################################
-# drltrace frontend
-
-set(front_srcs
-    drltrace_frontend.cpp
-    drltrace_options.cpp)
-#if (WIN32)
-#  set(front_srcs ${front_srcs} ${PROJECT_SOURCE_DIR}/make/resources.rc)
-#endif ()
-
-add_executable(drltrace ${front_srcs})
-
-configure_DynamoRIO_standalone(drltrace)
-
-target_link_libraries(drltrace drinjectlib drconfiglib drfrontendlib)
-
-#set_library_version(drltrace ${DRMF_VERSION})
-
-if (WIN32)
-  set_property(TARGET drltrace PROPERTY COMPILE_DEFINITIONS
-               ${DEFINES_NO_D} RC_IS_DRLTRACE)
-else ()
-  set_property(TARGET drltrace PROPERTY COMPILE_DEFINITIONS ${DEFINES_NO_D})
-endif ()
-
-# XXX: see DR's i#2429 and comment above.
-if (UNIX)
-  # to avoid conflicts with new declaration with "C" linkage in utils.h
-  append_property_string(TARGET drltrace COMPILE_FLAGS "-DNOLINK_STRCASESTR")
-endif()
-
-##################################################
 # drltrace config
 
 set(conf_out ${PROJECT_BINARY_DIR}/${BIN_ARCH}/drltrace.config)
@@ -380,6 +393,10 @@ endif ()
 function(tobuild name source)
   set(srcs ${source})
   add_executable(${name} ${srcs})
+    set_target_properties(
+            ${name}
+            PROPERTIES
+            COMPILE_DEFINITIONS UNIX)
 endfunction(tobuild)
 
 function (get_target_path_for_execution out target)
@@ -435,9 +452,8 @@ else ()
   set(libcall_both_variants "    arg 0: done \\(type=char\\*, size=0x([0-9a-f]+)\\)\n")
   set(libcall_args1_01 ${libcall_both_variants})
 
-  set(libcall_args2_0 "    arg 0: /dev/null \\(type=char \\*\\*, size=0x([0-9a-f]+)\\)\n")
-  set(libcall_args2_1 "    arg 1: 0x([0-9a-f]+) \\(type=<unknown>\\*, size=0x([0-9a-f]+)\\)\n")
-
+  set(libcall_args2_0 "    arg 0: /dev/null \\(type=char\\*, size=0x([0-9a-f]+)\\)\n") #arg 0: /dev/null (type=char*, size=0x0)
+  set(libcall_args2_1 "    arg 1: 0x([0-9a-f]+) \\(type=int, size=0x([0-9a-f]+)\\)\n") #arg 1: 0x1 (type=int, size=0x4)
   set(libcall_name1 "~~([0-9a-f]+)~~ libc.so.6!puts\n")
   set(libcall_name2 "~~([0-9a-f]+)~~ libc.so.6!open\n")
 endif(WIN32)

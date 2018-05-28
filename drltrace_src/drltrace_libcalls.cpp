@@ -33,6 +33,7 @@
 #include "drltrace.h"
 #include "hashtable.h"
 #include <algorithm>
+
 /****************************************************************************
  * Routines to support libcalls hashtable
  */

@@ -52,6 +52,12 @@ static file_t outf;
 /* Avoid exe exports, as on Linux many apps have a ton of global symbols. */
 static app_pc exe_start;
 
+static inline generic_func_t
+cast_to_func(void *p)
+{
+    return (generic_func_t) p;
+}
+
 /****************************************************************************
  * Arguments printing
  */
