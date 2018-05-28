@@ -28,7 +28,7 @@ environment:
       CONFIG: Release
 
 before_build:
-  - if "%configuration%"=="2013" call "c:\Program Files (x86)\Microsoft Visual Studio 12.0\VC\vcvarsall.bat" x86
+  - call "c:\Program Files (x86)\Microsoft Visual Studio 12.0\VC\vcvarsall.bat" x86
   - cd c:\projects\drltrace
   - git submodule update --init --recursive
   - mkdir build
