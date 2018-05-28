@@ -23,9 +23,6 @@ configuration:
 before_build:
   - if "%configuration%"=="2013" call "c:\Program Files (x86)\Microsoft Visual Studio 12.0\VC\vcvarsall.bat" x86
   - cd c:\projects\drltrace
-
-build_script:
-  # Unlike Travis, AppVeyor doesn't do a submodule update for us.
   - git submodule update --init --recursive
   - mkdir build
   - cd build
