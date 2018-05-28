@@ -16,7 +16,7 @@ env:
 before_script:
   - "mkdir build"
   - "cd build"
-  - "cmake -DBUILD_TOOL_TESTS ../drltrace_src/"
+  - "cmake -DBUILD_TOOL_TESTS=ON ../drltrace_src/"
 
 script: 
   - "make"
