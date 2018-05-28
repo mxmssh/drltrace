@@ -12,13 +12,20 @@ branches:
 
 platform: x64
 
-matrix:
-  fast_finish: true     # set this flag to immediately finish build once one of the jobs fails.
+environment:
+  matrix:
+    #fast_finish: true     # set this flag to immediately finish build once one of the jobs fails.
+    - GENERATOR: "Visual Studio 12"
+      CONFIG: Debug
 
-image: Visual Studio 2013
+    - GENERATOR: "Visual Studio 12"
+      CONFIG: Release
 
-configuration:
-  - 2013
+    - GENERATOR: "Visual Studio 12 Win64"
+      CONFIG: Debug
+
+    - GENERATOR: "Visual Studio 12 Win64"
+      CONFIG: Release
 
 before_build:
   - if "%configuration%"=="2013" call "c:\Program Files (x86)\Microsoft Visual Studio 12.0\VC\vcvarsall.bat" x86
@@ -26,10 +33,9 @@ before_build:
   - git submodule update --init --recursive
   - mkdir build
   - cd build
-  - cmake -G"Visual Studio 12" -DCMAKE_BUILD_TYPE=Debug ..\drltrace_src\
 
-build:
-  parallel: true                  # enable MSBuild parallel builds
-  project: C:/projects/drltrace/build/drltrace.sln      # path to Visual Studio solution or project
-  # MSBuild verbosity level
-  verbosity: detailed
+build_script:
+  #parallel: true
+  - cmake -G%GENERATOR% -DCMAKE_BUILD_TYPE=%CONFIG% ..\drltrace_src\
+  - cmake --build . --config "%CONFIG%"
+  
