@@ -29,7 +29,7 @@ install:
 before_script:
   - "mkdir build"
   - "cd build"
-  - "cmake -DBUILD_TOOL_TESTS=ON %DEBUG_MODE% ../drltrace_src/"
+  - cmake -DBUILD_TOOL_TESTS=ON %DEBUG_MODE% ../drltrace_src/
 
 script: 
   - "make"
