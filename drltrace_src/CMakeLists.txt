@@ -32,6 +32,12 @@
 
 cmake_minimum_required(VERSION 3.2)
 
+if (DEBUG)
+  message(STATUS "Building Debug build")
+else()
+  message(STATUS "Building RelWithDebInfo build")
+endif(DEBUG)
+
 function (append_property_string type target name value)
   # XXX: if we require cmake 2.8.6 we can simply use APPEND_STRING
   get_property(cur ${type} ${target} PROPERTY ${name})
