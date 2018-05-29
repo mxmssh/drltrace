@@ -10,10 +10,18 @@ sudo: required
 dist: trusty
 
 env:
-  - BUILD=x86_64-linux-gnu
+  - BUILD=x86_64-linux-gnu_release
     CXXFLAGS=-m64 CFLAGS=-m64 LDFLAGS=-m64
-  - BUILD=i686-linux-gnu
+    DEBUG_MODE:-DDEBUG=OFF
+  - BUILD=x86_64-linux-gnu_debug
+    CXXFLAGS=-m64 CFLAGS=-m64 LDFLAGS=-m64
+    DEBUG_MODE:-DDEBUG=ON
+  - BUILD=i686-linux-gnu_release
     CXXFLAGS=-m32 CFLAGS=-m32
+    DEBUG_MODE:-DDEBUG=OFF
+  - BUILD=i686-linux-gnu_debug
+    CXXFLAGS=-m32 CFLAGS=-m32
+    DEBUG_MODE:-DDEBUG=ON
 
 install:
    - sudo apt-get install gcc-multilib g++-multilib
@@ -21,7 +29,7 @@ install:
 before_script:
   - "mkdir build"
   - "cd build"
-  - "cmake -DBUILD_TOOL_TESTS=ON ../drltrace_src/"
+  - "cmake -DBUILD_TOOL_TESTS=ON %DEBUG_MODE% ../drltrace_src/"
 
 script: 
   - "make"
