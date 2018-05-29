@@ -12,9 +12,11 @@ dist: trusty
 env:
   - BUILD=x86_64-linux-gnu_release
     CXXFLAGS=-m64 CFLAGS=-m64 LDFLAGS=-m64
+    DEBUG_MODE2:DEBUG=OFF
     DEBUG_MODE:-DDEBUG=OFF
   - BUILD=x86_64-linux-gnu_debug
     CXXFLAGS=-m64 CFLAGS=-m64 LDFLAGS=-m64
+    DEBUG_MODE2:DEBUG=ON
     DEBUG_MODE:-DDEBUG=ON
   - BUILD=i686-linux-gnu_release
     CXXFLAGS=-m32 CFLAGS=-m32
@@ -29,7 +31,7 @@ install:
 before_script:
   - "mkdir build"
   - "cd build"
-  - cmake -DBUILD_TOOL_TESTS=ON %DEBUG_MODE% ../drltrace_src/
+  - cmake -DBUILD_TOOL_TESTS=ON %DEBUG_MODE% %DEBUG_MODE2% ../drltrace_src/
 
 script: 
   - "make"
