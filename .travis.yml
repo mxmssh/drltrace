@@ -2,9 +2,11 @@ language:
   - c
   - cpp
 
+  
 os: linux
 compiler: gcc  
- 
+
+sudo: required 
 dist: trusty
 
 env:
@@ -12,7 +14,10 @@ env:
     CXXFLAGS=-m64 CFLAGS=-m64 LDFLAGS=-m64
   - BUILD=i686-linux-gnu
     CXXFLAGS=-m32 CFLAGS=-m32
-      
+
+install:
+   - sudo apt-get install gcc-multilib g++-multilib
+    
 before_script:
   - "mkdir build"
   - "cd build"
