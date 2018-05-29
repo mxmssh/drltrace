@@ -2,7 +2,6 @@ language:
   - c
   - cpp
 
-  
 os: linux
 compiler: gcc  
 
@@ -25,7 +24,7 @@ env:
 
 install:
    - sudo apt-get install gcc-multilib g++-multilib
-    
+
 before_script:
   - "mkdir build"
   - "cd build"
