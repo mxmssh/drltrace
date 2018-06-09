@@ -257,6 +257,10 @@ if (WIN32)
   endif (DEBUG)
 endif (WIN32)
 
+if (UNIX)
+  add_definitions(-Dmpreferred-stack-boundary=4)
+endif (UNIX)
+
 #if (OPTIMIZE_SAMPLES)
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OPT_CFLAGS}")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OPT_CFLAGS}")
