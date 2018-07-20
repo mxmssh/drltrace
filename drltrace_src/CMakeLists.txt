@@ -257,10 +257,6 @@ if (WIN32)
   endif (DEBUG)
 endif (WIN32)
 
-if (UNIX)
-  add_definitions(-Dmpreferred-stack-boundary=4)
-endif (UNIX)
-
 #if (OPTIMIZE_SAMPLES)
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OPT_CFLAGS}")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OPT_CFLAGS}")
@@ -285,21 +281,7 @@ add_executable(drltrace ${front_srcs})
 if (WIN32)
   set_property(TARGET drltrace PROPERTY COMPILE_DEFINITIONS
                ${DEFINES_NO_D} RC_IS_DRLTRACE)
-else ()
-  #set_property(TARGET drltrace PROPERTY COMPILE_DEFINITIONS ${DEFINES_NO_D})
-  # DR's boundary of 2 causes compilation error, so we stick to default.
-  # This is okay because this is a standalone app, and does not need to match
-  # DynamoRIO.
-  #string(REPLACE "-mpreferred-stack-boundary=2 " "" CMAKE_CXX_FLAGS
-         #"${CMAKE_CXX_FLAGS}")
-  #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-strict-overflow")
 endif ()
-
-# XXX: see DR's i#2429 and comment above.
-#if (UNIX)
-  # to avoid conflicts with new declaration with "C" linkage in utils.h
-  #append_property_string(TARGET drltrace COMPILE_FLAGS "-DNOLINK_STRCASESTR")
-#endif()
 
 configure_DynamoRIO_standalone(drltrace)
 
@@ -477,3 +459,18 @@ endif(WIN32)
   set_tests_properties(drltrace_libargs PROPERTIES PASS_REGULAR_EXPRESSION
                        ${libcall_both_variants})
 endif (BUILD_TOOL_TESTS)
+
+
+##### some manual fixes ##########
+
+if (UNIX AND NOT X64)
+  append_property_string(TARGET drltrace COMPILE_FLAGS "-m32")
+  append_property_string(TARGET drltrace LINK_FLAGS "-m32")
+  append_property_string(TARGET drltracelib COMPILE_FLAGS "-m32")
+  append_property_string(TARGET drltracelib LINK_FLAGS "-m32")
+  if(BUILD_TOOL_TESTS)
+    append_property_string(TARGET drltrace_app COMPILE_FLAGS "-m32")
+    append_property_string(TARGET drltrace_app LINK_FLAGS "-m32")
+  endif(BUILD_TOOL_TESTS)
+endif()
+
