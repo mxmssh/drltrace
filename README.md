@@ -3,7 +3,7 @@ Windows test build ![build status](https://ci.appveyor.com/api/projects/status/g
 
 Linux test build [![Build Status](https://travis-ci.com/mxmssh/drltrace.svg?branch=master)](https://travis-ci.com/mxmssh/drltrace)
 
-Drltrace is a dynamic API calls tracer for Windows and Linux applications designed primarily for malware analysis. Drltrace is built on top of [DynamoRIO](http://www.dynamorio.org/) dynamic binary instrumentation framework. The release build can be downloaded [here](https://github.com/mxmssh/drltrace/releases).
+Drltrace is a dynamic API calls tracer for Windows and Linux applications. Drltrace is built on top of [DynamoRIO](http://www.dynamorio.org/) dynamic binary instrumentation framework. Drltrace was initialy implemented by Derek Bruening and distributed with DynamoRIO and DrMemory frameworks. This repository contains a standalone version of drltrace with additional scripts and materials on how to use it for malware analysis. is The release build can be downloaded [here](https://github.com/mxmssh/drltrace/releases).
 
 # Usage
 The usage of drltrace is very simple. A user needs to specify a log directory and a name of a target process in the following way:
