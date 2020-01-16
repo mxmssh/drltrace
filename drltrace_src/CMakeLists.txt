@@ -380,6 +380,8 @@ else ()
   configure_file(${CMAKE_CURRENT_SOURCE_DIR}/drltrace_linux.config ${conf_out} COPYONLY)
 endif ()
 
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/filter.config ${PROJECT_BINARY_DIR}/${BIN_ARCH}/filter.config COPYONLY)
+
 ##################################################
 # drltrace tests
 

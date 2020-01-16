@@ -39,6 +39,7 @@ extern droption_t<bool> op_print_ret_addr;
 extern droption_t<unsigned int> op_unknown_args;
 extern droption_t<int> op_max_args;
 extern droption_t<bool> op_config_file_default;
+extern droption_t<std::string> op_filter_file;
 extern droption_t<std::string> op_config_file;
 extern droption_t<bool> op_ignore_underscore;
 extern droption_t<std::string> op_only_to_lib;
