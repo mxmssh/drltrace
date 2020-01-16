@@ -108,7 +108,7 @@ print_arg(void *drcontext, drltrace_arg_t *arg)
 {
     if (arg->pre && (TEST(DRSYS_PARAM_OUT, arg->mode) && !TEST(DRSYS_PARAM_IN, arg->mode)))
         return;
-    dr_fprintf(outf, "\n    arg %d: ", arg->ordinal);
+    dr_fprintf(outf, "%s%d: ", (op_grepable.get_value() ? " {" : "\n    arg "), arg->ordinal);
     switch (arg->type) {
     case DRSYS_TYPE_VOID:         print_simple_value(arg, true); break;
     case DRSYS_TYPE_POINTER:      print_simple_value(arg, true); break;
@@ -147,6 +147,9 @@ print_arg(void *drcontext, drltrace_arg_t *arg)
               (arg->type_name == NULL ||
               TESTANY(DRSYS_PARAM_INLINED|DRSYS_PARAM_RETVAL, arg->mode)) ? "" : "*",
               arg->size);
+
+    if (op_grepable.get_value())
+        dr_fprintf(outf, "}");
 }
 
 static bool
@@ -168,10 +171,18 @@ print_args_unknown_call(app_pc func, void *wrapcxt)
 {
     uint i;
     void *drcontext = drwrap_get_drcontext(wrapcxt);
+    char *prefix = "\n    arg ";
+    char *suffix = "";
+    if (op_grepable.get_value()) {
+      prefix = " {";
+      suffix = "}";
+    }
     DR_TRY_EXCEPT(drcontext, {
         for (i = 0; i < op_unknown_args.get_value(); i++) {
-            dr_fprintf(outf, "\n    arg %d: " PFX, i,
+            dr_fprintf(outf, "%s%d: " PFX, prefix, i,
                        drwrap_get_arg(wrapcxt, i));
+            if (*suffix != '\0')
+                dr_fprintf(outf, suffix);
         }
     }, {
         dr_fprintf(outf, "<invalid memory>");
