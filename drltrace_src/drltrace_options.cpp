@@ -104,3 +104,6 @@ droption_t<std::string> op_ltracelib_ops
  "", "(For internal use: sweeps up drltracelib options)",
  "This is an internal option that sweeps up other options to pass to the drltracelib.");
 
+droption_t<bool> op_grepable
+(DROPTION_SCOPE_CLIENT, "grepable", false, "Grepable output",
+ "Outputs function names and arguments entirely on one line to enable easy log grepping.");
