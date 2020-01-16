@@ -40,6 +40,10 @@ The format of the output is simple and can be easily parsed by an external scrip
 arg [arg #]: [value] (type=[Windows type name], size=[size of arg])
 and return to module id:[module unique id], offset:[offset in memory]
 ```
+Parsing with `grep` can be done when the `-grepable` argument is used; this prints the function names and arguments all on one line:
+```
+~~4824~~ KERNELBASE.dll!CreateFileW {0: C:\Windows\Fonts\staticcache.dat (type=wchar_t*, size=0x0)} {1: 0x80000000 (type=DWORD, size=0x4)} {2: 0x3 (type=DWORD, size=0x4)} {3: 0x005cde8c (type=<unknown>*, size=0x0)} {4: 0x3 (type=DWORD, size=0x4)} {5: 0x80 (type=DWORD, size=0x4)}
+```
 The module unique identifiers table is printed at the end of the log file:
 ```
 Module Table: version 3, count 70
@@ -105,6 +109,7 @@ However, application of DBI for malware analysis is undeservedly limited by unpa
  -version             [ false]  Print version number.
  -verbose             [     1]  Change verbosity.
  -use_config          [  true]  Use config file
+ -grepable            [ false]  Grepable output
  ```
 # Configuration file syntax
 Drltrace supports external configuration files where a user can describe how drltrace should print arguments for certain API calls.
