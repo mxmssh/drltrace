@@ -30,7 +30,12 @@
 * DAMAGE.
 */
 
+#ifdef WINDOWS
+#include <string.h>
+#else
 #include <strings.h>
+#endif
+
 #include "drltrace_utils.h"
 
 static thread_id_t primary_thread = INVALID_THREAD_ID;
