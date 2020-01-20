@@ -30,11 +30,16 @@
  * DAMAGE.
  */
 
+#ifndef _DRLTRACE_UTILS_H
+#define _DRLTRACE_UTILS_H
+
 #include "dr_api.h"
 
 /* XXX: some data types were taken from drsyscall.h and utils.h (DrMemory) */
 
 void print_prefix_to_console(void);
+
+int fast_strcmp(char *s1, size_t s1_len, char *s2, size_t s2_len);
 
 #ifdef DEBUG
 # define IF_DEBUG(x) x
@@ -225,3 +230,5 @@ strcasestr(const char *text, const char *pattern);
 # define ASSERT(x, msg) /* nothing */
 # define ASSERT_NOT_TESTED(msg) /* nothing */
 #endif
+
+#endif /* _DRLTRACE_UTILS_H */

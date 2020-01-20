@@ -40,7 +40,7 @@
 #include <fstream>
 #include <vector>
 #include "drltrace.h"
-
+#include "drltrace_utils.h"
 
 /* Where to write the trace */
 static file_t outf;
@@ -67,8 +67,6 @@ static size_t filter_whitelist_len = 0;
 
 static wb_list *filter_blacklist = NULL;
 static size_t filter_blacklist_len = 0;
-
-static int fast_strcmp(char *s1, size_t s1_len, char *s2, size_t s2_len);
 
 /****************************************************************************
  * Arguments printing
@@ -287,15 +285,18 @@ lib_entry(void *wrapcxt, INOUT void **user_data)
 #ifdef WINDOWS
 #define snprintf _snprintf
 #endif
-    size_t module_name_len = (size_t)snprintf(module_name, sizeof(module_name) - 1, "%s%s%s", modname == NULL ? "" : modname, modname == NULL ? "" : "!", name);
+    size_t module_name_len = (size_t)snprintf(module_name, sizeof(module_name) - 1, \
+        "%s%s%s", modname == NULL ? "" : modname, modname == NULL ? "" : "!", name);
 
     /* Check if this module & function is in the whitelist. */
     bool allowed = false;
     bool tested = false;  /* True only if any white/blacklist testing below is done. */
     for (unsigned int i = 0; (allowed == false) && (i < filter_whitelist_len); i++) {
       tested = true;
-      if (fast_strcmp(module_name, module_name_len, filter_whitelist[i].func_name, filter_whitelist[i].func_name_len) == 0)
+      if (fast_strcmp(module_name, module_name_len, filter_whitelist[i].func_name, \
+          filter_whitelist[i].func_name_len) == 0) {
 	allowed = true;
+      }
     }
 
     /* Check the blacklist if it was specified instead of a whitelist. */
@@ -303,8 +304,10 @@ lib_entry(void *wrapcxt, INOUT void **user_data)
       allowed = true;
       for (unsigned int i = 0; allowed && (i < filter_blacklist_len); i++) {
 	tested = true;
-	if (fast_strcmp(module_name, module_name_len, filter_blacklist[i].func_name, filter_blacklist[i].func_name_len) == 0)
+	if (fast_strcmp(module_name, module_name_len, filter_blacklist[i].func_name, \
+            filter_blacklist[i].func_name_len) == 0) {
 	  allowed = false;
+	}
       }
     }
 
@@ -439,21 +442,6 @@ open_log_file(void)
         VNOTIFY(0, "drltrace log file is %s" NL, buf);
 
     }
-}
-
-/* A faster(?) version of strcmp(), since strcmp() does extra string
- * comparison we don't need (we just need an equality test).  Returns
- * 0 when strings are equal, otherwise returns non-zero. */
-static int
-fast_strcmp(char *s1, size_t s1_len, char *s2, size_t s2_len) {
-  if (s1_len != s2_len)
-    return -1;
-
-#ifdef WINDOWS
-  return memcmp(s1, s2, s1_len);
-#else
-  return bcmp(s1, s2, s1_len);  /* Fastest option. */
-#endif
 }
 
 /* Frees a wblist array. */

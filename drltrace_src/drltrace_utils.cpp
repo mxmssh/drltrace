@@ -30,6 +30,7 @@
 * DAMAGE.
 */
 
+#include <strings.h>
 #include "drltrace_utils.h"
 
 static thread_id_t primary_thread = INVALID_THREAD_ID;
@@ -40,6 +41,22 @@ uint op_prefix_style;
 file_t f_global = INVALID_FILE;
 int reported_disk_error;
 uint op_ignore_asserts = false;
+
+
+/* A faster(?) version of strcmp(), since strcmp() does extra string
+ * comparison we don't need (we just need an equality test).  Returns
+ * 0 when strings are equal, otherwise returns non-zero. */
+inline int
+fast_strcmp(char *s1, size_t s1_len, char *s2, size_t s2_len) {
+  if (s1_len != s2_len)
+    return -1;
+
+#ifdef WINDOWS
+  return memcmp(s1, s2, s1_len); /* VC2013 doesn't have bcmp(), sadly. */
+#else
+  return bcmp(s1, s2, s1_len);  /* Fastest option. */
+#endif
+}
 
 void
 print_prefix_to_buffer(char *buf, size_t bufsz, size_t *sofar)
