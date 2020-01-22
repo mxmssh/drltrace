@@ -57,16 +57,23 @@ cast_to_func(void *p)
 struct _wblist {
   char *func_name;
   size_t func_name_len;
+  unsigned int is_wildcard;  /* Set to 1 when this is a wildcard, otherwise 0. */
 };
 typedef struct _wblist wb_list; /* Stands for white/black list. */
 
 /* Arrays to hold functions in the whitelist/blacklist.  Used instead
  * of vectors due to speed requirements. */
-static wb_list *filter_whitelist = NULL;
-static size_t filter_whitelist_len = 0;
+static wb_list *filter_function_whitelist = NULL;
+static unsigned int filter_function_whitelist_len = 0;
 
-static wb_list *filter_blacklist = NULL;
-static size_t filter_blacklist_len = 0;
+static wb_list *filter_function_blacklist = NULL;
+static unsigned int filter_function_blacklist_len = 0;
+
+/* Vectors to hold modules in the whitelist/blacklist. */
+static std::vector<std::string> filter_module_whitelist;
+static std::vector<std::string> filter_module_blacklist;
+
+
 
 /****************************************************************************
  * Arguments printing
@@ -285,29 +292,52 @@ lib_entry(void *wrapcxt, INOUT void **user_data)
 #ifdef WINDOWS
 #define snprintf _snprintf
 #endif
-    size_t module_name_len = (size_t)snprintf(module_name, sizeof(module_name) - 1, \
-        "%s%s%s", modname == NULL ? "" : modname, modname == NULL ? "" : "!", name);
+    unsigned int module_name_len = (unsigned int)snprintf(module_name, \
+        sizeof(module_name) - 1, "%s%s%s", modname == NULL ? "" : modname, \
+        modname == NULL ? "" : "!", name);
 
     /* Check if this module & function is in the whitelist. */
     bool allowed = false;
     bool tested = false;  /* True only if any white/blacklist testing below is done. */
-    for (unsigned int i = 0; (allowed == false) && (i < filter_whitelist_len); i++) {
+    for (unsigned int i = 0; (allowed == false) && (i < filter_function_whitelist_len); i++) {
       tested = true;
-      if (fast_strcmp(module_name, module_name_len, filter_whitelist[i].func_name, \
-          filter_whitelist[i].func_name_len) == 0) {
-	allowed = true;
+
+      /* If the whitelist entry contains a wildcard, then compare only the shortest
+       * part of either string. */
+      unsigned int module_name_len_compare;
+      if (filter_function_whitelist[i].is_wildcard)
+        module_name_len_compare = MIN(module_name_len, \
+          filter_function_whitelist[i].func_name_len);
+      else
+        module_name_len_compare = module_name_len;
+
+      if (fast_strcmp(module_name, module_name_len_compare, \
+          filter_function_whitelist[i].func_name, \
+          filter_function_whitelist[i].func_name_len) == 0) {
+        allowed = true;
       }
     }
 
     /* Check the blacklist if it was specified instead of a whitelist. */
-    if (!allowed && filter_blacklist_len > 0) {
+    if (!allowed && filter_function_blacklist_len > 0) {
       allowed = true;
-      for (unsigned int i = 0; allowed && (i < filter_blacklist_len); i++) {
-	tested = true;
-	if (fast_strcmp(module_name, module_name_len, filter_blacklist[i].func_name, \
-            filter_blacklist[i].func_name_len) == 0) {
-	  allowed = false;
-	}
+      for (unsigned int i = 0; allowed && (i < filter_function_blacklist_len); i++) {
+        tested = true;
+
+	/* If the blacklist entry contains a wildcard, then compare only the shortest
+	 * part of either string. */
+        unsigned int module_name_len_compare;
+        if (filter_function_blacklist[i].is_wildcard)
+          module_name_len_compare = MIN(module_name_len, \
+            filter_function_blacklist[i].func_name_len);
+        else
+          module_name_len_compare = module_name_len;
+
+        if (fast_strcmp(module_name, module_name_len_compare, \
+            filter_function_blacklist[i].func_name, \
+            filter_function_blacklist[i].func_name_len) == 0) {
+          allowed = false;
+        }
       }
     }
 
@@ -392,16 +422,34 @@ iterate_exports(const module_data_t *info, bool add)
 static bool
 library_matches_filter(const module_data_t *info)
 {
-    if (!op_only_to_lib.get_value().empty()) {
-        const char *libname = dr_module_preferred_name(info);
-#ifdef WINDOWS
-        return (libname != NULL && strcasestr(libname,
-                                              op_only_to_lib.get_value().c_str()) != NULL);
-#else
-        return (libname != NULL && strstr(libname,
-                                          op_only_to_lib.get_value().c_str()) != NULL);
-#endif
+  if (!filter_module_whitelist.empty()) {
+    const char *libname = dr_module_preferred_name(info);
+    if (libname == NULL)
+      return false;
+
+    for (std::vector<std::string>::const_iterator iter = \
+        filter_module_whitelist.begin(); iter != filter_module_whitelist.end(); \
+        iter++) {
+
+      if (strcmp(libname, iter->c_str()) == 0)
+	return true;
     }
+
+    return false;
+  } else if (!filter_module_blacklist.empty()) {
+    const char *libname = dr_module_preferred_name(info);
+    if (libname == NULL)
+      return true;
+
+    for (std::vector<std::string>::const_iterator iter = \
+        filter_module_blacklist.begin(); iter != filter_module_blacklist.end(); \
+        iter++) {
+      if (strcmp(libname, iter->c_str()) == 0)
+	return false;
+    }
+
+    return true;
+  } else
     return true;
 }
 
@@ -463,15 +511,36 @@ free_wblist_array(wb_list **wbl, unsigned int wb_list_len) {
   free(*wbl);  *wbl = NULL;
 }
 
+/* Adds a module name to the module filter. */
+void
+add_module_filter(std::vector<std::string> &module_wbl, const char *module_name) {
+
+  /* If the module name is already in the filter, ignore. */
+  for (std::vector<std::string>::const_iterator iter = module_wbl.begin(); iter != module_wbl.end(); iter++) {
+    if (strcmp(module_name, iter->c_str()) == 0)
+      return;
+  }
+
+  module_wbl.push_back(module_name);
+}
+
 /* Convert a vector to an array of wb_list structs.  This may be faster
  * to process than a vector when handling function call-backs. */
-static unsigned int
-vector_to_wblist(std::vector<std::string> &v, wb_list **wbl) {
+static void
+parse_filter(std::vector<std::string> &v_in, bool is_whitelist, std::vector<std::string> &module_wbl, wb_list **func_wbl, unsigned int *func_wbl_len) {
+
+  /* First look for entries that don't have a '!'; these are module names that
+   * need to be filtered at the module-level. */
+  for (std::vector<std::string>::const_iterator iter = v_in.begin(); \
+       iter != v_in.end(); iter++) {
+    if (iter->find('!') == std::string::npos)
+      add_module_filter(module_wbl, iter->c_str());
+  }
 
   /* Allocate the array of wb_list structs. */
-  size_t v_len = v.size();
-  *wbl = (wb_list *)calloc(v_len, sizeof(wb_list));
-  if (*wbl == NULL) {
+  unsigned int v_in_len = v_in.size();
+  *func_wbl = (wb_list *)calloc(v_in_len, sizeof(wb_list));
+  if (*func_wbl == NULL) {
     fprintf(stderr, "Failed to allocate whitelist/blacklist array.\n");
     exit(-1);
   }
@@ -479,22 +548,51 @@ vector_to_wblist(std::vector<std::string> &v, wb_list **wbl) {
   /* For every entry in the vector, strdup() the function name and add
    * it to the array. */
   unsigned j = 0;
-  for (std::vector<std::string>::const_iterator iter = v.begin(); (iter != v.end()) && (j < v_len); iter++, j++) {
+  for (std::vector<std::string>::const_iterator iter = v_in.begin(); \
+       (iter != v_in.end()) && (j < v_in_len); iter++, j++) {
+
+    unsigned int is_wildcard = 0;
     char *s = strdup(iter->c_str());
     if (s == NULL) {
       fprintf(stderr, "Failed to allocate whitelist/blacklist array.\n");
       exit(-1);
     }
 
-    wb_list *l = *wbl;
+    /* If the function name ends with a '*', then it is a wildcard prefix.  Set the
+     * wildcard flag and cut off the trailing '*'. */
+    if (s[strlen(s) - 1] == '*') {
+      s[strlen(s) - 1] = '\0';
+      is_wildcard = 1;
+
+    /* If a module name was provided without a corresponding function, then this is a
+     * wildcard module.  These, too, must be added to the function-level filter in
+     * order for whitelisted functions to be allowed through. */
+    } else if (strchr(s, '!') == NULL)
+      is_wildcard = 1;
+
+    /* If we're parsing the whitelist filter, ensure that the module for this function
+     * is in the module whitelist as well, otherwise the function-level filtering will
+     * never trigger. */
+    if (is_whitelist) {
+      char *module_name = strdup(s);
+      char *bang_pos = strchr(module_name, '!');
+      if (bang_pos != NULL) {
+	*bang_pos = '\0';
+	add_module_filter(module_wbl, module_name);
+      }
+      free(module_name);  module_name = NULL;
+    }
+
+    wb_list *l = *func_wbl;
     l[j].func_name = s;
+    l[j].is_wildcard = is_wildcard;
 
     /* We store the function name length too, so we don't repeatedly
      * call strlen() on an unchanging string in the critical region. */
     l[j].func_name_len = strlen(s);
   }
 
-  return v_len;
+  *func_wbl_len = v_in_len;
 }
 
 /* Parse the whitelist/blacklist entries in the filter file. */
@@ -545,9 +643,9 @@ parse_filter_file(void)
   /* Convert the vectors to an array of wb_list structs.  This is
    * possibly faster to process in the critical region later. */
   if (!temp_whitelist.empty())
-    filter_whitelist_len = vector_to_wblist(temp_whitelist, &filter_whitelist);
+    parse_filter(temp_whitelist, true, filter_module_whitelist, &filter_function_whitelist, &filter_function_whitelist_len);
   else if (!temp_blacklist.empty())
-    filter_blacklist_len = vector_to_wblist(temp_blacklist, &filter_blacklist);
+    parse_filter(temp_blacklist, false, filter_module_blacklist, &filter_function_blacklist, &filter_function_blacklist_len);
 
   filter_file.close();
 }
@@ -573,8 +671,8 @@ event_exit(void)
         dr_close_file(outf);
     }
 
-    free_wblist_array(&filter_whitelist, filter_whitelist_len);
-    free_wblist_array(&filter_blacklist, filter_blacklist_len);
+    free_wblist_array(&filter_function_whitelist, filter_function_whitelist_len);
+    free_wblist_array(&filter_function_blacklist, filter_function_blacklist_len);
 
     drx_exit();
     drwrap_exit();
