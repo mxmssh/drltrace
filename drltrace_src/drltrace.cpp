@@ -37,14 +37,10 @@
  * The runtime options for this client are specified in drltrace_options.h,
  * see DROPTION_SCOPE_CLIENT options.
  */
+#include <fstream>
+#include <vector>
 #include "drltrace.h"
-
-/* XXX: features to add:
- *
- * + Add filtering of which library routines or concrete routine to trace.
- *   This would likely be via a configuration file.
- *   Currently we have a simple -only_to_lib option.
- */
+#include "drltrace_utils.h"
 
 /* Where to write the trace */
 static file_t outf;
@@ -57,6 +53,20 @@ cast_to_func(void *p)
 {
     return (generic_func_t) p;
 }
+
+struct _wblist {
+  char *func_name;
+  size_t func_name_len;
+};
+typedef struct _wblist wb_list; /* Stands for white/black list. */
+
+/* Arrays to hold functions in the whitelist/blacklist.  Used instead
+ * of vectors due to speed requirements. */
+static wb_list *filter_whitelist = NULL;
+static size_t filter_whitelist_len = 0;
+
+static wb_list *filter_blacklist = NULL;
+static size_t filter_blacklist_len = 0;
 
 /****************************************************************************
  * Arguments printing
@@ -265,13 +275,53 @@ lib_entry(void *wrapcxt, INOUT void **user_data)
     if (mod != NULL)
         modname = dr_module_preferred_name(mod);
 
+    /* Build the module & function string, then compare to the white/black
+     * list. */
+    char module_name[256];
+    memset(module_name, 0, sizeof(module_name));
+
+    /* Temporary workaround for VC2013, which doesn't have snprintf().
+     * apparently, this was added in later releases... */
+#ifdef WINDOWS
+#define snprintf _snprintf
+#endif
+    size_t module_name_len = (size_t)snprintf(module_name, sizeof(module_name) - 1, \
+        "%s%s%s", modname == NULL ? "" : modname, modname == NULL ? "" : "!", name);
+
+    /* Check if this module & function is in the whitelist. */
+    bool allowed = false;
+    bool tested = false;  /* True only if any white/blacklist testing below is done. */
+    for (unsigned int i = 0; (allowed == false) && (i < filter_whitelist_len); i++) {
+      tested = true;
+      if (fast_strcmp(module_name, module_name_len, filter_whitelist[i].func_name, \
+          filter_whitelist[i].func_name_len) == 0) {
+	allowed = true;
+      }
+    }
+
+    /* Check the blacklist if it was specified instead of a whitelist. */
+    if (!allowed && filter_blacklist_len > 0) {
+      allowed = true;
+      for (unsigned int i = 0; allowed && (i < filter_blacklist_len); i++) {
+	tested = true;
+	if (fast_strcmp(module_name, module_name_len, filter_blacklist[i].func_name, \
+            filter_blacklist[i].func_name_len) == 0) {
+	  allowed = false;
+	}
+      }
+    }
+
+    /* If whitelist/blacklist testing was performed, and it was determined
+     * this function is not to be logged... */
+    if (tested && !allowed)
+      return;
+
     tid = dr_get_thread_id(drcontext);
     if (tid != INVALID_THREAD_ID)
         dr_fprintf(outf, "~~%d~~ ", tid);
     else
         dr_fprintf(outf, "~~Dr.L~~ ");
-    dr_fprintf(outf, "%s%s%s", modname == NULL ? "" : modname,
-               modname == NULL ? "" : "!", name);
+    dr_fprintf(outf, module_name);
 
     /* XXX: We employ two schemes of arguments printing.  We are looking for prototypes
      * in config file specified by user to get symbolic representation of arguments
@@ -394,6 +444,114 @@ open_log_file(void)
     }
 }
 
+/* Frees a wblist array. */
+static void
+free_wblist_array(wb_list **wbl, unsigned int wb_list_len) {
+  if ((wbl == NULL) || (*wbl == NULL) || (wb_list_len == 0))
+    return;
+
+  /* Loop through all entries and free the function name, since it was
+   * created with strdup().  Set it (and the length) to zero for good
+   * measure. */
+  for (unsigned int i = 0; i < wb_list_len; i++) {
+    wb_list *l = *wbl;
+    free(l[i].func_name);  l[i].func_name = NULL;
+    l[i].func_name_len = 0;
+  }
+
+  /* Now free the array itself. */
+  free(*wbl);  *wbl = NULL;
+}
+
+/* Convert a vector to an array of wb_list structs.  This may be faster
+ * to process than a vector when handling function call-backs. */
+static unsigned int
+vector_to_wblist(std::vector<std::string> &v, wb_list **wbl) {
+
+  /* Allocate the array of wb_list structs. */
+  size_t v_len = v.size();
+  *wbl = (wb_list *)calloc(v_len, sizeof(wb_list));
+  if (*wbl == NULL) {
+    fprintf(stderr, "Failed to allocate whitelist/blacklist array.\n");
+    exit(-1);
+  }
+
+  /* For every entry in the vector, strdup() the function name and add
+   * it to the array. */
+  unsigned j = 0;
+  for (std::vector<std::string>::const_iterator iter = v.begin(); (iter != v.end()) && (j < v_len); iter++, j++) {
+    char *s = strdup(iter->c_str());
+    if (s == NULL) {
+      fprintf(stderr, "Failed to allocate whitelist/blacklist array.\n");
+      exit(-1);
+    }
+
+    wb_list *l = *wbl;
+    l[j].func_name = s;
+
+    /* We store the function name length too, so we don't repeatedly
+     * call strlen() on an unchanging string in the critical region. */
+    l[j].func_name_len = strlen(s);
+  }
+
+  return v_len;
+}
+
+/* Parse the whitelist/blacklist entries in the filter file. */
+static void
+parse_filter_file(void)
+{
+  if (op_filter_file.get_value().empty())
+    return;
+
+  std::vector<std::string> temp_whitelist;
+  std::vector<std::string> temp_blacklist;
+
+  std::ifstream filter_file(op_filter_file.get_value().c_str());
+
+  /* Loop through every line in the filter file. */
+  std::string line;
+  bool mode_whitelist = false, mode_blacklist = false;
+  while (std::getline(filter_file, line)) {
+
+    /* Skip empty lines and comments. */
+    if (line.empty() || (line.find("#") == 0))
+      continue;
+
+    /* When we find a whitelist header, add subsequent lines to the whitelist.
+    /* Otherwise, when we find a blacklist header, add subsequent lines to the
+    /* blacklist. */
+    if (line == std::string("[whitelist]")) {
+      mode_whitelist = true;
+      mode_blacklist = false;
+      continue;
+    } else if (line == std::string("[blacklist]")) {
+      mode_whitelist = false;
+      mode_blacklist = true;
+      continue;
+    }
+
+    if (mode_whitelist)
+      temp_whitelist.push_back(line);
+    else if (mode_blacklist)
+      temp_blacklist.push_back(line);
+  }
+
+  /* If both a whitelist and a blacklist was specified, the blacklist is
+   * ignored. */
+  if (!temp_whitelist.empty() && !temp_blacklist.empty())
+    temp_blacklist.clear();
+
+  /* Convert the vectors to an array of wb_list structs.  This is
+   * possibly faster to process in the critical region later. */
+  if (!temp_whitelist.empty())
+    filter_whitelist_len = vector_to_wblist(temp_whitelist, &filter_whitelist);
+  else if (!temp_blacklist.empty())
+    filter_blacklist_len = vector_to_wblist(temp_blacklist, &filter_blacklist);
+
+  filter_file.close();
+}
+
 #ifndef WINDOWS
 static void
 event_fork(void *drcontext)
@@ -414,6 +572,10 @@ event_exit(void)
             drmodtrack_dump(outf);
         dr_close_file(outf);
     }
+
+    free_wblist_array(&filter_whitelist, filter_whitelist_len);
+    free_wblist_array(&filter_blacklist, filter_blacklist_len);
+
     drx_exit();
     drwrap_exit();
     drmgr_exit();
@@ -475,4 +637,5 @@ dr_client_main(client_id_t id, int argc, const char *argv[])
         parse_config();
 
     open_log_file();
+    parse_filter_file();
 }

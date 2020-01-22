@@ -77,6 +77,10 @@ droption_t<std::string> op_config_file
  " of library functions for printing library call arguments.  See drltrace documentation"
  " for more details.");
 
+droption_t<std::string> op_filter_file
+(DROPTION_SCOPE_CLIENT, "filter", "filter.config", "The path of the whitelist/blacklist file.",
+ "Specify a path to a file containing the list of functions to whitelist or blacklist.");
+
 droption_t<bool> op_ignore_underscore
 (DROPTION_SCOPE_CLIENT, "ignore_underscore", false, "Ignores library routine names "
  "starting with \"_\".", "Ignores library routine names starting with \"_\".");

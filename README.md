@@ -61,7 +61,7 @@ Columns: id, containing_id, start, end, entry, checksum, timestamp, path
  10,  10, 0x74930000, 0x75c78000, 0x74aa09d0, 0x01377aa6, 0x4b39926b,  C:\Windows\System32\SHELL32.dll
 ```
 
-Drltrace can easily filter out interlibrary calls and print only API calls performed from the main module (or from a heap) of a target application by specifying ```-only_from_app``` option which is very useful in case of applications that generate huge logs. Drltrace also has several useful external scripts to filter API calls for certain library, print only potentially interesting API calls and strings.
+Drltrace can easily filter out interlibrary calls and print only API calls performed from the main module (or from a heap) of a target application by specifying ```-only_from_app``` option which is very useful in case of applications that generate huge logs. For more granular control, the `-filter` option allows the user to specify a filter configuration file in order to filter in specific whitelisted functions, or ignore blacklisted functions (see the *filter.config* file for examples). Drltrace also has several useful external scripts to filter API calls for certain library, print only potentially interesting API calls and strings.
 
 # License
 
@@ -103,6 +103,7 @@ However, application of DBI for malware analysis is undeservedly limited by unpa
  -num_max_args        [     6]  Maximum number of arguments to print
  -default_config      [  true]  Use default config file.
  -config              [    ""]  The path to custom config file.
+ -filter              [filter.config]  The path of the whitelist/blacklist file.
  -ignore_underscore   [ false]  Ignores library routine names starting with "_".
  -only_to_lib         [    ""]  Only reports calls to the library <lib_name>.
  -help                [ false]  Print this message.
