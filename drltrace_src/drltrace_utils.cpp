@@ -51,7 +51,7 @@ uint op_ignore_asserts = false;
 /* A faster(?) version of strcmp(), since strcmp() does extra string
  * comparison we don't need (we just need an equality test).  Returns
  * 0 when strings are equal, otherwise returns non-zero. */
-inline int
+int
 fast_strcmp(char *s1, size_t s1_len, char *s2, size_t s2_len) {
   if (s1_len != s2_len)
     return -1;
