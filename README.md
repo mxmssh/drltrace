@@ -172,3 +172,5 @@ Our issue tracker contains more details about future of drltrace.
 Maksim Shudrak https://github.com/mxmssh
 
 Derek Bruening https://github.com/derekbruening
+
+Joe Testa https://github.com/jtesta 
