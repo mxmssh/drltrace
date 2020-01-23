@@ -105,7 +105,6 @@ However, application of DBI for malware analysis is undeservedly limited by unpa
  -config              [    ""]  The path to custom config file.
  -filter              [filter.config]  The path of the whitelist/blacklist file.
  -ignore_underscore   [ false]  Ignores library routine names starting with "_".
- -only_to_lib         [    ""]  Only reports calls to the library <lib_name>.
  -help                [ false]  Print this message.
  -version             [ false]  Print version number.
  -verbose             [     1]  Change verbosity.

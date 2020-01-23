@@ -85,10 +85,6 @@ droption_t<bool> op_ignore_underscore
 (DROPTION_SCOPE_CLIENT, "ignore_underscore", false, "Ignores library routine names "
  "starting with \"_\".", "Ignores library routine names starting with \"_\".");
 
-droption_t<std::string> op_only_to_lib
-(DROPTION_SCOPE_CLIENT, "only_to_lib", "", "Only reports calls to the library <lib_name>. ",
- "Only reports calls to the library <lib_name>. Argument is case insensitive on Windows.");
-
 droption_t<bool> op_help
 (DROPTION_SCOPE_FRONTEND, "help", false, "Print this message.", "Print this message");
 
