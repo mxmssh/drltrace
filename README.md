@@ -65,9 +65,9 @@ Drltrace can easily filter out interlibrary calls and print only API calls perfo
 
 # License
 
-Drltrace main modules are distrubuted under BSD.
+Drltrace main modules are distributed  under BSD.
 
-Some files required for drltrace are distrubuted under LGPL. See source files for more details.
+Some files required for drltrace are distributed under LGPL. See source files for more details.
 
 # Motivation
 Malware analysis is not an easy task. Sophisticated software packers like Themida and Armadillo and of course dozens of unnamed packers written by malware authors plus code & data encryption significantly facilitate (in some cases making it completely impossible) static reverse engineering of such samples making life of malware analysts complicated. In such case, API calls tracing can significantly reduce amount of time required to understand an actual malicious intent and reveal a lot of technical details about protected malicious code.
