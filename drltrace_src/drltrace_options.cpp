@@ -107,3 +107,14 @@ droption_t<std::string> op_ltracelib_ops
 droption_t<bool> op_grepable
 (DROPTION_SCOPE_CLIENT, "grepable", false, "Grepable output",
  "Outputs function names and arguments entirely on one line to enable easy log grepping.");
+
+droption_t<bool> op_no_retval
+(DROPTION_SCOPE_CLIENT, "no-retval", false, "Disable return value parsing",
+ "Disable return value caching & parsing.");
+
+droption_t<unsigned int> op_retval_max_cache
+(DROPTION_SCOPE_CLIENT, "retval-max-cache", 0,
+ "Maximum number of cached function calls", "The maximum number of function calls that "
+ "should be cached while waiting for return values.  When reached, the cache will be "
+ "emptied immediately and return values discarded; new function calls will be cached "
+ "normally.  Only use this option if memory exhaustion occurs.");
