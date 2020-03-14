@@ -68,7 +68,6 @@ endfunction (set_output_dirs)
 if (UNIX)
   set(DEFINES ${DEFINES} -DUNIX)
   set(LINUX 1)
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
 endif (UNIX)
 
 # To match Makefiles and have just one build type per configured build
