@@ -6,7 +6,7 @@ os: linux
 compiler: gcc  
 
 sudo: required 
-dist: trusty
+dist: bionic
 
 env:
   - BUILD=x86_64-linux-gnu_release
