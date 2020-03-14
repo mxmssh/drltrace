@@ -47,7 +47,7 @@ before_build:
 build_script:
   #parallel: true
   - cmake "-G%GENERATOR%" -DDEBUG=%DEBUG_FLAG% -DBUILD_TOOL_TESTS=ON ..\drltrace_src\
-  - cmake --build . --config %CONFIG%
+  - cmake --build . --config "%CONFIG%"
 
 test_script:
   - ctest -VV
