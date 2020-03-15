@@ -32,12 +32,6 @@
 
 cmake_minimum_required(VERSION 3.2)
 
-if (DEBUG)
-  message(STATUS "Building Debug build")
-else()
-  message(STATUS "Building RelWithDebInfo build")
-endif(DEBUG)
-
 function (append_property_string type target name value)
   # XXX: if we require cmake 2.8.6 we can simply use APPEND_STRING
   get_property(cur ${type} ${target} PROPERTY ${name})
@@ -87,6 +81,8 @@ if ("${CMAKE_GENERATOR}" MATCHES "Visual Studio")
 else ("${CMAKE_GENERATOR}" MATCHES "Visual Studio")
   set(location_suffix "")
 endif ("${CMAKE_GENERATOR}" MATCHES "Visual Studio")
+
+message("Generated with config types: ${CMAKE_CONFIGURATION_TYPES}")
 
 project(drltrace)
 
@@ -252,7 +248,7 @@ if (WIN32)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${CL_CFLAGS}")
   add_definitions(-D_CRT_SECURE_NO_WARNINGS)
   if (DEBUG)
-    #set(OPT_CFLAGS "/DFEBUG")
+    #set(OPT_CFLAGS "/DEBUG")
     add_definitions(-DDEBUG)
   endif (DEBUG)
 endif (WIN32)
@@ -261,6 +257,11 @@ endif (WIN32)
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OPT_CFLAGS}")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OPT_CFLAGS}")
 #endif ()
+
+if (UNIX)
+  set(EXTRA_CXXFLAGS "-std=c++11")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${EXTRA_CXXFLAGS}")
+endif()
 
 #include(${PROJECT_SOURCE_DIR}/make/policies.cmake NO_POLICY_SCOPE)
 
@@ -273,6 +274,21 @@ set(front_srcs
 #if (WIN32)
 #  set(front_srcs ${front_srcs} ${PROJECT_SOURCE_DIR}/make/resources.rc)
 #endif ()
+
+macro(fix_win32_flags srcfile)
+  if (WIN32)
+    if (DEBUG)
+      get_property(cur SOURCE ${srcfile} PROPERTY COMPILE_FLAGS)
+      string(REPLACE "/MTd " "" cur "${cur}") # Avoid override warning.
+      set_source_files_properties(${srcfile} PROPERTIES COMPILE_FLAGS "${cur} /EHsc /MTd")
+      append_property_string(SOURCE ${srcfile} LINK_FLAGS "/nodefaultlib:libcmt")
+    else ()
+      append_property_string(SOURCE ${srcfile} COMPILE_FLAGS "/EHsc /MT")
+    endif ()
+  endif ()
+endmacro ()
+
+fix_win32_flags(drltrace_frontend.cpp)
 
 add_executable(drltrace ${front_srcs})
 
@@ -425,7 +441,6 @@ else()
   set(drltrace_path "${drltrace_path}/drltrace")
   set(app_path "${app_path}/drltrace_app")
 endif(WIN32)
-  message(${drltrace_path}, ${app_path})
 
   prefix_cmd_if_necessary(drltrace_path OFF ${drltrace_path})
 
