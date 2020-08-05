@@ -94,7 +94,7 @@ def add_dots_on_image(
     return all_dots
 
 
-def create_image(all_dots, image_name):
+def create_image(all_dots, image_name, output_folder):
     # calculate width and height
     total_size = math.sqrt(len(all_dots))
     w = int(total_size) + 1
@@ -112,11 +112,11 @@ def create_image(all_dots, image_name):
             i += 1
             j = 0
     img = Image.fromarray(data, 'RGB')
-    img.save(image_name)
+    img.save(os.path.join(output_folder, image_name))
     print("Done")
 
 
-def create_html_page(name):
+def create_html_page(name, output_folder):
     global css_styles, divs_image
     # page headers */
     print("Generating HTML image")
@@ -137,12 +137,12 @@ def create_html_page(name):
     for div in divs_image:
         html_image += div
     html_image += "</body></head></html>"
-    with open(name, 'w') as file:
+    with open(os.path.join(output_folder, name), 'w') as file:
         file.write(html_image)
     print("Done")
 
 
-def create_html_legend(name):
+def create_html_legend(name, output_folder):
     global css_styles, divs
     # page headers */
     print("Generating legend in HTML")
@@ -163,12 +163,14 @@ def create_html_legend(name):
         html_legenda += div
     html_legenda += "</body></head></html>"
 
-    with open("legend_%s.html" % name, 'w') as file:
+    with open(os.path.join(output_folder, "legend_%s.html" % name),
+              'w') as file:
         file.write(html_legenda)
     print("Done")
 
 
-def gen_image(trace_name, image_name, html_page_name, grayscale):
+def gen_image(
+        trace_name, image_name, html_page_name, grayscale, output_folder):
     unique_libcalls = list()
     libcalls_seq = list()
 
@@ -206,8 +208,8 @@ def gen_image(trace_name, image_name, html_page_name, grayscale):
         libcall_colors_dict = choose_colors(unique_libcalls, grayscale)
         dots = add_dots_on_image(
             libcall_colors_dict, libcalls_seq, html_page_name, grayscale)
-        create_image(dots, image_name)
-        create_html_legend(image_name)
+        create_image(dots, image_name, output_folder)
+        create_html_legend(image_name, output_folder)
         if html_page_name is not None:
             create_html_page(html_page_name)
 
@@ -219,18 +221,41 @@ def main():
                                      + 'visualization.',
                                      usage='% (prog)s - t calc.exe.txt - i'
                                      + 'calc.jpeg - ht calc.html')
-    parser.add_argument('-t', '--trace', required=True,
+    parser.add_argument('-t', '--trace',
                         help="A trace file with API calls in the following"
                         + "format \"library_name!api_call_name\"")
+    parser.add_argument('-if', '--input_folder', default="input",
+                        help="An input folder containing"
+                        + "files with API calls in the following"
+                        + "format \"library_name!api_call_name\"")
+    parser.add_argument('-of', '--output_folder', default=".",
+                        help="An output folder that will contain the images"
+                        + "format \"library_name!api_call_name\"")
+    # generate jpeg image
     parser.add_argument('-i', '--image', default="tmp.jpeg",
-                        help="A name of image file")  # generate jpeg image
+                        help="A name of image file")
     # generate html page with image
     parser.add_argument('-ht', '--html', help="A name of html page (heavy)")
     parser.add_argument('-gr', '--grayscale', dest='grayscale',
                         action='store_true',
                         help="Generate an image in grayscale")
     args = parser.parse_args()
-    gen_image(args.trace, args.image, args.html, args.grayscale)
+    if not os.path.exists(args.output_folder):
+        os.mkdir(args.output_folder)
+
+    # If we chose to generate an image from one log
+    if args.trace:
+        gen_image(args.trace, args.image, args.html,
+                  args.grayscale, args.output_folder)
+    # If we chose to generate images for an entire folder of logs
+    elif args.input_folder:
+        for root, dirs, files in os.walk(args.input_folder):
+            for filename in files:
+                gen_image(os.path.join(root, filename),
+                          filename + ".jpeg", args.html,
+                          args.grayscale, args.output_folder)
+    else:
+        print("No input file nor folder provided")
 
 
 if __name__ == "__main__":
