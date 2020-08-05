@@ -12,8 +12,6 @@ from colorsys import hsv_to_rgb
 # A user can add his/her own list of API calls here
 marked_calls = ["GetProcAddress"]
 
-all_dots = list()
-
 css_styles = ""
 divs = ""
 divs_image = ""
@@ -72,6 +70,7 @@ def choose_colors(unique_libcalls, grayscale):
 
 def add_dots_on_image(
         libcalls_colors_dict, libcalls_seq, html_page_name, grayscale):
+    all_dots = []
     libcalls_count = len(libcalls_seq)
     print("Adding %d colors on image/images" % libcalls_count)
     for api_name in libcalls_seq:
@@ -171,8 +170,13 @@ def create_html_legend(name, output_folder):
 
 def gen_image(
         trace_name, image_name, html_page_name, grayscale, output_folder):
-    unique_libcalls = list()
-    libcalls_seq = list()
+    unique_libcalls = []
+    libcalls_seq = []
+
+    global css_styles, divs, divs_image
+    css_styles = ""
+    divs = ""
+    divs_image = ""
 
     # to be able to generate the same image each run for single trace
     random.seed(0)
