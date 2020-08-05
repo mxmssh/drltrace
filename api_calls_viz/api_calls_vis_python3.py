@@ -137,10 +137,8 @@ def create_html_page(name):
     for div in divs_image:
         html_image += div
     html_image += "</body></head></html>"
-
-    fh = open(name, 'w')
-    fh.write(html_image)
-    fh.close()
+    with open(name, 'w') as file:
+        file.write(html_image)
     print("Done")
 
 
@@ -165,9 +163,8 @@ def create_html_legend(name):
         html_legenda += div
     html_legenda += "</body></head></html>"
 
-    fh = open("legend_%s.html" % name, 'w')
-    fh.write(html_legenda)
-    fh.close()
+    with open("legend_%s.html" % name, 'w') as file:
+        file.write(html_legenda)
     print("Done")
 
 
@@ -177,45 +174,42 @@ def gen_image(trace_name, image_name, html_page_name, grayscale):
 
     # to be able to generate the same image each run for single trace
     random.seed(0)
-    try:
-        content = open(trace_name).readlines()
-    except expression as identifier:
-        print('Failed to open the file %s, error msg: %s' %
-              (trace_name, str(expression)))
 
-    # TODO: what if I randomly selected red 0x255 0x0 0x0?
-    for line in content:
-        # skip arguments provided by drltrace
-        if "    arg" in line or "module id" in line:
-            continue
-        # extract API call name
-        line = line[:line.find("(")]
-        api_name = line[line.find("!")+1:]
+    with open(file=trace_name, mode="r", encoding="utf8") as file:
+        content = file.readlines()
+        # TODO: what if I randomly selected red 0x255 0x0 0x0?
+        for line in content:
+            # skip arguments provided by drltrace
+            if "    arg" in line or "module id" in line:
+                continue
+            # extract API call name
+            line = line[:line.find("(")]
+            api_name = line[line.find("!")+1:]
 
-        if api_name not in unique_libcalls:
-            unique_libcalls.append(api_name)  # save in unique calls
-        # save in sequence for future proceedings
-        libcalls_seq.append(api_name)
+            if api_name not in unique_libcalls:
+                unique_libcalls.append(api_name)  # save in unique calls
+            # save in sequence for future proceedings
+            libcalls_seq.append(api_name)
 
-    entries_count = len(libcalls_seq)
+        entries_count = len(libcalls_seq)
 
-    if entries_count <= 0:
-        print("Failed to find any API calls matching dll_name!"
-              + "api_name pattern in the file specified")
-        sys.exit(0)
-    else:
-        print("Found %d api calls in the file" % entries_count)
+        if entries_count <= 0:
+            print("Failed to find any API calls matching dll_name!"
+                  + "api_name pattern in the file specified")
+            sys.exit(0)
+        else:
+            print("Found %d api calls in the file" % entries_count)
 
-    print("Starting image generation")
+        print("Starting image generation")
 
-    # choose colors for each unique image
-    libcall_colors_dict = choose_colors(unique_libcalls, grayscale)
-    dots = add_dots_on_image(
-        libcall_colors_dict, libcalls_seq, html_page_name, grayscale)
-    create_image(dots, image_name)
-    create_html_legend(image_name)
-    if html_page_name is not None:
-        create_html_page(html_page_name)
+        # choose colors for each unique image
+        libcall_colors_dict = choose_colors(unique_libcalls, grayscale)
+        dots = add_dots_on_image(
+            libcall_colors_dict, libcalls_seq, html_page_name, grayscale)
+        create_image(dots, image_name)
+        create_html_legend(image_name)
+        if html_page_name is not None:
+            create_html_page(html_page_name)
 
 
 def main():
