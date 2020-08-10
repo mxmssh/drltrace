@@ -49,3 +49,5 @@ extern droption_t<unsigned int> op_verbose;
 extern droption_t<bool> op_use_config;
 extern droption_t<std::string> op_ltracelib_ops;
 extern droption_t<bool> op_grepable;
+extern droption_t<bool> op_no_retval;
+extern droption_t<unsigned int> op_retval_max_cache;

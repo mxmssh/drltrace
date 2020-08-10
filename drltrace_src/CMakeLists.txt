@@ -310,7 +310,8 @@ set(srcs
     drltrace.cpp
     drltrace_libcalls.cpp
     drltrace_options.cpp
-    drltrace_utils.cpp)
+    drltrace_utils.cpp
+    drltrace_retval_cache.cpp)
 
 set(DynamoRIO_USE_LIBC OFF)
 

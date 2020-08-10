@@ -33,6 +33,12 @@
 #ifndef _DRLTRACE_UTILS_H
 #define _DRLTRACE_UTILS_H
 
+#ifdef WINDOWS
+#include <string.h>
+#else
+#include <strings.h>
+#endif
+
 #include "dr_api.h"
 
 /* XXX: some data types were taken from drsyscall.h and utils.h (DrMemory) */
@@ -43,7 +49,7 @@ void print_prefix_to_console(void);
  * comparison we don't need (we just need an equality test).  Returns
  * 0 when strings are equal, otherwise returns non-zero. */
 inline int
-fast_strcmp(char *s1, size_t s1_len, char *s2, size_t s2_len) {
+fast_strcmp(const char *s1, size_t s1_len, const char *s2, size_t s2_len) {
   if (s1_len != s2_len)
     return -1;
 

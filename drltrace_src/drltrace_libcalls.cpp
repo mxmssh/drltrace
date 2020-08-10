@@ -260,15 +260,15 @@ parse_line(const char *line, int line_num)
     std::vector<drltrace_arg_t *> *args_vector = new std::vector<drltrace_arg_t *>();
     std::vector<std::string>::iterator it;
     for (it = tokens.begin(); it != tokens.end(); ++it) {
-        /* FIXME DrMemory i#1948: Currently, we don't support ret value printing and
-         * skipping it here.
-         */
         if (elem_index >= 2) {
             tmp_arg = config_parse_type(*it, elem_index - 2);
             args_vector->push_back(tmp_arg);
         } else if (elem_index == 1)
             func_name = it->c_str();
-
+	else {
+	    tmp_arg = config_parse_type(*it, 0);
+            args_vector->push_back(tmp_arg);
+	}
         elem_index++;
     }
 
