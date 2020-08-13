@@ -42,7 +42,7 @@
 #include "drltrace.h"
 #include "drltrace_utils.h"
 
-#if _MSC_VER < 1900
+#if WINDOWS
     #define snprintf _snprintf
 #endif
 
