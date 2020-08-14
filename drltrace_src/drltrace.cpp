@@ -88,7 +88,7 @@ print_simple_value(drltrace_arg_t *arg, bool leading_zeroes, std::string &output
 {
     bool pointer = !TEST(DRSYS_PARAM_INLINED, arg->mode);
     char str[128];
-    snprintf(str, 128, pointer ? PFX : (leading_zeroes ? PFX : PIFX), arg->value);
+    snprintf(str, 128, pointer ? "0x%016x" : (leading_zeroes ? "0x%016x" : PIFX), arg->value);
     output.append(str);
 
     if (pointer && ((arg->pre && TEST(DRSYS_PARAM_IN, arg->mode)) ||
@@ -97,7 +97,7 @@ print_simple_value(drltrace_arg_t *arg, bool leading_zeroes, std::string &output
         ASSERT(arg->size <= sizeof(deref), "too-big simple type");
         /* We assume little-endian */
         if (dr_safe_read((void *)arg->value, arg->size, &deref, NULL)) {
-            snprintf(str, 128, (leading_zeroes ? " => " PFX : " => " PIFX), deref);
+            snprintf(str, 128, (leading_zeroes ? " => " "0x%016x" : " => " PIFX), deref);
             output.append(str);
         }
     }
@@ -112,6 +112,7 @@ print_string(void *drcontext, void *pointer_str, bool is_wide, std::string &outp
         DR_TRY_EXCEPT(drcontext, {
             char str[256];
             snprintf(str, 256, is_wide ? "%S" : "%s", pointer_str);
+            output.append(str, strlen(str) - 1);
         }, {
             output.append("<invalid memory>");
         });
@@ -153,15 +154,15 @@ print_arg(void *drcontext, drltrace_arg_t *arg, std::string &output)
             output.append("<null>");
         else {
             char str[128];
-            snprintf(str, 128, PFX, arg->value);
+            snprintf(str, 128, "0x%016x", arg->value);
             output.append(str);
         }
     }
     }
     char str[128];
-    snprintf(str, 128, PFX, arg->size);
+    snprintf(str, 128, "0x%x", arg->size);
 
-    output.append("(");
+    output.append(" (");
     output.append((arg->arg_name == NULL) ? "" : "name=");
     output.append((arg->arg_name == NULL) ? "" : arg->arg_name);
     output.append((arg->arg_name == NULL) ? "" : ", ");
@@ -208,7 +209,7 @@ print_args_unknown_call(app_pc func, void *wrapcxt, std::string &output)
             output.append(std::to_string(i));
             output.append(": ");
             char str[128];
-            snprintf(str, 128, PFX, drwrap_get_arg(wrapcxt, i));
+            snprintf(str, 128, "0x%016x" ,drwrap_get_arg(wrapcxt, i));
             output.append(str);
             if (*suffix != '\0')
                 output.append(suffix);
@@ -399,7 +400,7 @@ lib_entry(void *wrapcxt, INOUT void **user_data)
                 output.append(std::to_string(mod_id));
                 output.append(", offset:");
                 char str[128];
-                sprintf(str, PIFX, ret_addr - mod_start);
+                snprintf(str, 128, PIFX, ret_addr - mod_start);
                 output.append(str);
             }
         }
