@@ -112,7 +112,15 @@ print_string(void *drcontext, void *pointer_str, bool is_wide, std::string &outp
         DR_TRY_EXCEPT(drcontext, {
             char str[256];
             snprintf(str, 256, is_wide ? "%S" : "%s", pointer_str);
-            output.append(str, strlen(str) - 1);
+            output.append(str, strlen(str));
+            if (output.back() == '\n')
+            {
+                output.pop_back();
+            }
+            if (output.back() == '\r')
+            {
+                output.pop_back();
+            }
         }, {
             output.append("<invalid memory>");
         });
