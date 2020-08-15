@@ -168,17 +168,18 @@ print_arg(void *drcontext, drltrace_arg_t *arg, std::string &output)
     }
     }
     char str[128];
-    snprintf(str, 128, "0x%x", arg->size);
-
     output.append(" (");
     output.append((arg->arg_name == NULL) ? "" : "name=");
-    output.append((arg->arg_name == NULL) ? "" : arg->arg_name);
+    snprintf(str, 128, "%s", (arg->arg_name == NULL) ? "" : arg->arg_name);
+    output.append(str);
     output.append((arg->arg_name == NULL) ? "" : ", ");
     output.append("type=");
-    output.append((arg->type_name == NULL) ? "\"\"" : arg->type_name);
+    snprintf(str, 128, "%s", (arg->type_name == NULL) ? "\"\"" : arg->type_name);
+    output.append(str);
     output.append((arg->type_name == NULL ||
         TESTANY(DRSYS_PARAM_INLINED|DRSYS_PARAM_RETVAL, arg->mode)) ? "" : "*");
     output.append(", size=");
+    snprintf(str, 128, "0x%x", arg->size);
     output.append(str);
     output.append(")");
 
