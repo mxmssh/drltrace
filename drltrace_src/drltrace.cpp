@@ -42,6 +42,10 @@
 #include "drltrace.h"
 #include "drltrace_utils.h"
 
+#if WINDOWS
+    #define snprintf _snprintf
+#endif
+
 /* Where to write the trace */
 static file_t outf;
 
@@ -80,85 +84,103 @@ static std::vector<std::string> filter_module_blacklist;
  */
 
 static void
-print_simple_value(drltrace_arg_t *arg, bool leading_zeroes)
+print_simple_value(drltrace_arg_t *arg, bool leading_zeroes, std::string &output)
 {
     bool pointer = !TEST(DRSYS_PARAM_INLINED, arg->mode);
-    dr_fprintf(outf, pointer ? PFX : (leading_zeroes ? PFX : PIFX), arg->value);
+    char str[128];
+    snprintf(str, 128, pointer ? "0x%016x" : (leading_zeroes ? "0x%016x" : PIFX), arg->value);
+    output.append(str);
+
     if (pointer && ((arg->pre && TEST(DRSYS_PARAM_IN, arg->mode)) ||
                     (!arg->pre && TEST(DRSYS_PARAM_OUT, arg->mode)))) {
         ptr_uint_t deref = 0;
         ASSERT(arg->size <= sizeof(deref), "too-big simple type");
         /* We assume little-endian */
-        if (dr_safe_read((void *)arg->value, arg->size, &deref, NULL))
-            dr_fprintf(outf, (leading_zeroes ? " => " PFX : " => " PIFX), deref);
+        if (dr_safe_read((void *)arg->value, arg->size, &deref, NULL)) {
+            snprintf(str, 128, (leading_zeroes ? " => " "0x%016x" : " => " PIFX), deref);
+            output.append(str);
+        }
     }
 }
 
 static void
-print_string(void *drcontext, void *pointer_str, bool is_wide)
+print_string(void *drcontext, void *pointer_str, bool is_wide, std::string &output)
 {
     if (pointer_str == NULL)
-        dr_fprintf(outf, "<null>");
+        output.append("<null>");
     else {
         DR_TRY_EXCEPT(drcontext, {
-            dr_fprintf(outf, is_wide ? "%S" : "%s", pointer_str);
+            char str[256];
+            snprintf(str, 256, is_wide ? "%S" : "%s", pointer_str);
+            output.append(str, strlen(str));
         }, {
-            dr_fprintf(outf, "<invalid memory>");
+            output.append("<invalid memory>");
         });
     }
 }
 
 static void
-print_arg(void *drcontext, drltrace_arg_t *arg)
+print_arg(void *drcontext, drltrace_arg_t *arg, std::string &output)
 {
     if (arg->pre && (TEST(DRSYS_PARAM_OUT, arg->mode) && !TEST(DRSYS_PARAM_IN, arg->mode)))
         return;
-    dr_fprintf(outf, "%s%d: ", (op_grepable.get_value() ? " {" : "\n    arg "), arg->ordinal);
+    output.append(op_grepable.get_value() ? " {" : "\n    arg ");
+    output.append(std::to_string(arg->ordinal));
+    output.append(": ");
     switch (arg->type) {
-    case DRSYS_TYPE_VOID:         print_simple_value(arg, true); break;
-    case DRSYS_TYPE_POINTER:      print_simple_value(arg, true); break;
-    case DRSYS_TYPE_BOOL:         print_simple_value(arg, false); break;
-    case DRSYS_TYPE_INT:          print_simple_value(arg, false); break;
-    case DRSYS_TYPE_SIGNED_INT:   print_simple_value(arg, false); break;
-    case DRSYS_TYPE_UNSIGNED_INT: print_simple_value(arg, false); break;
-    case DRSYS_TYPE_HANDLE:       print_simple_value(arg, false); break;
-    case DRSYS_TYPE_NTSTATUS:     print_simple_value(arg, false); break;
-    case DRSYS_TYPE_ATOM:         print_simple_value(arg, false); break;
+    case DRSYS_TYPE_VOID:         print_simple_value(arg, true, output); break;
+    case DRSYS_TYPE_POINTER:      print_simple_value(arg, true, output); break;
+    case DRSYS_TYPE_BOOL:         print_simple_value(arg, false, output); break;
+    case DRSYS_TYPE_INT:          print_simple_value(arg, false, output); break;
+    case DRSYS_TYPE_SIGNED_INT:   print_simple_value(arg, false, output); break;
+    case DRSYS_TYPE_UNSIGNED_INT: print_simple_value(arg, false, output); break;
+    case DRSYS_TYPE_HANDLE:       print_simple_value(arg, false, output); break;
+    case DRSYS_TYPE_NTSTATUS:     print_simple_value(arg, false, output); break;
+    case DRSYS_TYPE_ATOM:         print_simple_value(arg, false, output); break;
 #ifdef WINDOWS
-    case DRSYS_TYPE_LCID:         print_simple_value(arg, false); break;
-    case DRSYS_TYPE_LPARAM:       print_simple_value(arg, false); break;
-    case DRSYS_TYPE_SIZE_T:       print_simple_value(arg, false); break;
-    case DRSYS_TYPE_HMODULE:      print_simple_value(arg, false); break;
+    case DRSYS_TYPE_LCID:         print_simple_value(arg, false, output); break;
+    case DRSYS_TYPE_LPARAM:       print_simple_value(arg, false, output); break;
+    case DRSYS_TYPE_SIZE_T:       print_simple_value(arg, false, output); break;
+    case DRSYS_TYPE_HMODULE:      print_simple_value(arg, false, output); break;
 #endif
     case DRSYS_TYPE_CSTRING:
-        print_string(drcontext, (void *)arg->value, false);
+        print_string(drcontext, (void *)arg->value, false, output);
         break;
     case DRSYS_TYPE_CWSTRING:
-        print_string(drcontext, (void *)arg->value, true);
+        print_string(drcontext, (void *)arg->value, true, output);
         break;
     default: {
         if (arg->value == 0)
-            dr_fprintf(outf, "<null>");
-        else
-            dr_fprintf(outf, PFX, arg->value);
+            output.append("<null>");
+        else {
+            char str[128];
+            snprintf(str, 128, "0x%016x", arg->value);
+            output.append(str);
+        }
     }
     }
-
-    dr_fprintf(outf, " (%s%s%stype=%s%s, size=" PIFX ")",
-              (arg->arg_name == NULL) ? "" : "name=",
-              (arg->arg_name == NULL) ? "" : arg->arg_name,
-              (arg->arg_name == NULL) ? "" : ", ",
-              (arg->type_name == NULL) ? "\"\"" : arg->type_name,
-              (arg->type_name == NULL ||
-              TESTANY(DRSYS_PARAM_INLINED|DRSYS_PARAM_RETVAL, arg->mode)) ? "" : "*",
-              arg->size);
+    char str[128];
+    output.append(" (");
+    output.append((arg->arg_name == NULL) ? "" : "name=");
+    snprintf(str, 128, "%s", (arg->arg_name == NULL) ? "" : arg->arg_name);
+    output.append(str);
+    output.append((arg->arg_name == NULL) ? "" : ", ");
+    output.append("type=");
+    snprintf(str, 128, "%s", (arg->type_name == NULL) ? "\"\"" : arg->type_name);
+    output.append(str);
+    output.append((arg->type_name == NULL ||
+        TESTANY(DRSYS_PARAM_INLINED|DRSYS_PARAM_RETVAL, arg->mode)) ? "" : "*");
+    output.append(", size=");
+    snprintf(str, 128, "0x%x", arg->size);
+    output.append(str);
+    output.append(")");
 
     if (op_grepable.get_value())
-        dr_fprintf(outf, "}");
+        output.append("}");
 }
 
 static bool
-drlib_iter_arg_cb(drltrace_arg_t *arg, void *wrapcxt)
+drlib_iter_arg_cb(drltrace_arg_t *arg, void *wrapcxt, std::string &output)
 {
     if (arg->ordinal == -1)
         return true;
@@ -167,12 +189,12 @@ drlib_iter_arg_cb(drltrace_arg_t *arg, void *wrapcxt)
 
     arg->value = (ptr_uint_t)drwrap_get_arg(wrapcxt, arg->ordinal);
 
-    print_arg(drwrap_get_drcontext(wrapcxt), arg);
+    print_arg(drwrap_get_drcontext(wrapcxt), arg, output);
     return true; /* keep going */
 }
 
 static void
-print_args_unknown_call(app_pc func, void *wrapcxt)
+print_args_unknown_call(app_pc func, void *wrapcxt, std::string &output)
 {
     uint i;
     void *drcontext = drwrap_get_drcontext(wrapcxt);
@@ -184,35 +206,39 @@ print_args_unknown_call(app_pc func, void *wrapcxt)
     }
     DR_TRY_EXCEPT(drcontext, {
         for (i = 0; i < op_unknown_args.get_value(); i++) {
-            dr_fprintf(outf, "%s%d: " PFX, prefix, i,
-                       drwrap_get_arg(wrapcxt, i));
+            output.append(prefix);
+            output.append(std::to_string(i));
+            output.append(": ");
+            char str[128];
+            snprintf(str, 128, "0x%016x" ,drwrap_get_arg(wrapcxt, i));
+            output.append(str);
             if (*suffix != '\0')
-                dr_fprintf(outf, suffix);
+                output.append(suffix);
         }
     }, {
-        dr_fprintf(outf, "<invalid memory>");
+        output.append("<invalid memory>");
         /* Just keep going */
     });
     /* all args have been sucessfully printed */
-    dr_fprintf(outf, op_print_ret_addr.get_value() ? "\n   ": "");
+    output.append(op_print_ret_addr.get_value() ? "\n   ": "");
 }
 
 static bool
-print_libcall_args(std::vector<drltrace_arg_t*> *args_vec, void *wrapcxt)
+print_libcall_args(std::vector<drltrace_arg_t*> *args_vec, void *wrapcxt, std::string &output)
 {
     if (args_vec == NULL || args_vec->size() <= 0)
         return false;
 
     std::vector<drltrace_arg_t*>::iterator it;
     for (it = args_vec->begin(); it != args_vec->end(); ++it) {
-        if (!drlib_iter_arg_cb(*it, wrapcxt))
+        if (!drlib_iter_arg_cb(*it, wrapcxt, output))
             break;
     }
     return true;
 }
 
 static void
-print_symbolic_args(const char *name, void *wrapcxt, app_pc func)
+print_symbolic_args(const char *name, void *wrapcxt, app_pc func, std::string &output)
 {
     std::vector<drltrace_arg_t *> *args_vec;
 
@@ -222,14 +248,14 @@ print_symbolic_args(const char *name, void *wrapcxt, app_pc func)
 	if (op_use_config.get_value()) {
 		/* looking for libcall in libcalls hashtable */
 		args_vec = libcalls_search(name);
-		if (print_libcall_args(args_vec, wrapcxt)) {
-			dr_fprintf(outf, op_print_ret_addr.get_value() ? "\n   " : "");
+		if (print_libcall_args(args_vec, wrapcxt, output)) {
+			output.append(op_print_ret_addr.get_value() ? "\n   " : "");
 			return; /* we found libcall and sucessfully printed all arguments */
 		}
 	}
     /* use standard type-blind scheme */
     if (op_unknown_args.get_value() > 0)
-        print_args_unknown_call(func, wrapcxt);
+        print_args_unknown_call(func, wrapcxt, output);
 }
 
 /****************************************************************************
@@ -346,12 +372,17 @@ lib_entry(void *wrapcxt, INOUT void **user_data)
     if (tested && !allowed)
       return;
 
+    std::string output = "";
+
     tid = dr_get_thread_id(drcontext);
-    if (tid != INVALID_THREAD_ID)
-        dr_fprintf(outf, "~~%d~~ ", tid);
+    if (tid != INVALID_THREAD_ID) {
+        output.append("~~");
+        output.append(std::to_string(tid));
+        output.append("~~ ");
+    }
     else
-        dr_fprintf(outf, "~~Dr.L~~ ");
-    dr_fprintf(outf, module_name);
+        output.append("~~Dr.L~~ ");
+    output.append(module_name);
 
     /* XXX: We employ two schemes of arguments printing.  We are looking for prototypes
      * in config file specified by user to get symbolic representation of arguments
@@ -359,19 +390,30 @@ lib_entry(void *wrapcxt, INOUT void **user_data)
      * we employ type-blindprinting and use -num_unknown_args to get a count of arguments
 	 * to print.
      */
-    print_symbolic_args(name, wrapcxt, func);
+    print_symbolic_args(name, wrapcxt, func, output);
 
     if (op_print_ret_addr.get_value()) {
         ret_addr = drwrap_get_retaddr(wrapcxt);
         res = drmodtrack_lookup(drcontext, ret_addr, &mod_id, &mod_start);
         if (res == DRCOVLIB_SUCCESS) {
-            dr_fprintf(outf,
-                       op_print_ret_addr.get_value() ?
-                       " and return to module id:%d, offset:" PIFX : "",
-                       mod_id, ret_addr - mod_start);
+            if (op_print_ret_addr.get_value()) {
+                output.append(" and return to module id:");
+                output.append(std::to_string(mod_id));
+                output.append(", offset:");
+                char str[128];
+                snprintf(str, 128, PIFX, ret_addr - mod_start);
+                output.append(str);
+            }
         }
     }
-    dr_fprintf(outf, "\n");
+    output.append("\n");
+
+    char * output_array;
+    output_array = (char*)calloc(output.length() + 1, sizeof(char));
+    strcpy(output_array, output.c_str());
+    dr_fprintf(outf, output_array);
+    free(output_array);
+    
     if (mod != NULL)
         dr_free_module_data(mod);
 }
