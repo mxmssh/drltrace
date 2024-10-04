@@ -237,7 +237,7 @@ print_symbolic_args(const char *name, void *wrapcxt, app_pc func)
  */
 
 static void
-lib_entry(void *wrapcxt, INOUT void **user_data)
+lib_entry(void *wrapcxt, DR_PARAM_INOUT void **user_data)
 {
     const char *name = (const char *) *user_data;
     const char *modname = NULL;

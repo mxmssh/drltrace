@@ -32,6 +32,8 @@
 
 #include "droption.h"
 
+using namespace dynamorio::droption;
+
 extern droption_t<std::string> op_logdir;
 extern droption_t<bool> op_only_from_app;
 extern droption_t<bool> op_follow_children;
