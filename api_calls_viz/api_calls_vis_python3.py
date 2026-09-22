@@ -215,7 +215,7 @@ def gen_image(
         create_image(dots, image_name, output_folder)
         create_html_legend(image_name, output_folder)
         if html_page_name is not None:
-            create_html_page(html_page_name)
+            create_html_page(html_page_name, output_folder)
 
 
 def main():
